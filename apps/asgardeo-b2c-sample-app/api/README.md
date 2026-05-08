@@ -32,7 +32,9 @@ GET  /health
 GET  /api/flights?from=Colombo&to=Singapore
 GET  /api/hotels?location=Singapore
 GET  /api/trips
+GET  /api/locations?category=flights
 POST /api/bookings
+GET  /api/bookings/flights
 GET  /api/me
 ```
 
@@ -74,5 +76,6 @@ Protected endpoints:
 
 ```text
 POST /api/bookings
+GET  /api/bookings/flights
 GET  /api/me
 ```

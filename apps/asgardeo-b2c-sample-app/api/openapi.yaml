@@ -11,6 +11,7 @@ tags:
   - name: Flights
   - name: Hotels
   - name: Trips
+  - name: Locations
   - name: Bookings
   - name: User
 paths:
@@ -105,6 +106,13 @@ paths:
       tags:
         - Trips
       summary: List saved sample trips
+      parameters:
+        - name: destination
+          in: query
+          required: false
+          schema:
+            type: string
+          example: Singapore
       responses:
         "200":
           description: Saved trips
@@ -119,6 +127,36 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Trip"
+  /api/locations:
+    get:
+      tags:
+        - Locations
+      summary: List searchable locations
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - flights
+              - hotels
+              - trips
+          example: flights
+      responses:
+        "200":
+          description: Available locations for search dropdowns
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Location"
   /api/bookings:
     post:
       tags:
@@ -154,6 +192,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/bookings/flights:
+    get:
+      tags:
+        - Bookings
+      summary: List booked flights for the current user
+      description: Requires an Asgardeo bearer token when `API_REQUIRE_AUTH=true`.
+      security:
+        - AsgardeoBearerAuth: []
+        - {}
+      responses:
+        "200":
+          description: Current user's booked flights
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BookedFlight"
         "401":
           description: Missing or invalid bearer token
           content:
@@ -349,11 +416,24 @@ components:
           minimum: 1
           default: 1
           example: 2
+    Location:
+      type: object
+      required:
+        - name
+        - type
+      properties:
+        name:
+          type: string
+          example: Singapore
+        type:
+          type: string
+          example: city
     Booking:
       type: object
       required:
         - id
         - userId
+        - username
         - type
         - itemId
         - travelers
@@ -366,6 +446,9 @@ components:
         userId:
           type: string
           example: local-demo-user
+        username:
+          type: string
+          example: local.traveler
         type:
           type: string
           example: flight
@@ -381,6 +464,33 @@ components:
         createdAt:
           type: string
           format: date-time
+    BookedFlight:
+      type: object
+      required:
+        - id
+        - username
+        - travelers
+        - status
+        - createdAt
+        - flight
+      properties:
+        id:
+          type: string
+          example: booking-2cd80f0a-17b8-4d2f-a436-44595fa0aa44
+        username:
+          type: string
+          example: local.traveler
+        travelers:
+          type: integer
+          example: 2
+        status:
+          type: string
+          example: confirmed
+        createdAt:
+          type: string
+          format: date-time
+        flight:
+          $ref: "#/components/schemas/Flight"
     User:
       type: object
       required:

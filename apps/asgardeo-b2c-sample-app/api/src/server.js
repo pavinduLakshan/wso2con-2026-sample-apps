@@ -3,7 +3,14 @@ import { randomUUID } from "node:crypto";
 import { URL } from "node:url";
 import "dotenv/config";
 import { resolveUser } from "./auth.js";
-import { findFlights, findHotels, listTrips } from "./db.js";
+import {
+  createBookingRecord,
+  findFlights,
+  findHotels,
+  listBookedFlights,
+  listLocations,
+  listTrips
+} from "./db.js";
 
 const port = Number(process.env.PORT || 8787);
 const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
@@ -68,17 +75,19 @@ async function handleBooking(request) {
     };
   }
 
+  const booking = createBookingRecord({
+    id: `booking-${randomUUID()}`,
+    user,
+    type: itemType,
+    itemId,
+    travelers,
+    status: "confirmed",
+    createdAt: new Date().toISOString()
+  });
+
   return {
     statusCode: 201,
-    body: {
-      id: `booking-${randomUUID()}`,
-      userId: user.id,
-      type: itemType,
-      itemId,
-      travelers,
-      status: "confirmed",
-      createdAt: new Date().toISOString()
-    }
+    body: booking
   };
 }
 
@@ -106,14 +115,35 @@ async function route(request, response) {
       });
     }
 
+    if (request.method === "GET" && url.pathname === "/api/locations") {
+      return sendJson(response, 200, {
+        data: listLocations({
+          category: url.searchParams.get("category")
+        })
+      });
+    }
+
     if (request.method === "GET" && url.pathname === "/api/trips") {
-      return sendJson(response, 200, { data: listTrips() });
+      return sendJson(response, 200, {
+        data: listTrips({
+          destination: url.searchParams.get("destination")
+        })
+      });
     }
 
     if (request.method === "GET" && url.pathname === "/api/me") {
       const user = await resolveUser(request);
 
       return sendJson(response, 200, { data: user });
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/bookings/flights") {
+      const user = await resolveUser(request);
+      const username = user.username || user.email || user.id;
+
+      return sendJson(response, 200, {
+        data: listBookedFlights(username)
+      });
     }
 
     if (request.method === "POST" && url.pathname === "/api/bookings") {

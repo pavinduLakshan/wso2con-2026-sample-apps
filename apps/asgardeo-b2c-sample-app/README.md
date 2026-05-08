@@ -1,8 +1,8 @@
 # Asgardeo B2C Sample App
 
-This repository contains a sample B2C travel booking application secured with Asgardeo. It is split into a React + Vite frontend and a Node.js REST API backed by SQLite.
+This repository contains a sample B2C travel booking application secured with Asgardeo. It is split into a React + Vite frontend, a Node.js REST API backed by SQLite, and a command-line AI agent sample.
 
-The application demonstrates a travel experience where users can search for flights and hotels, view trip ideas, and use Asgardeo-powered account actions such as sign in, sign up, and sign out.
+The application demonstrates a travel experience where users can search for flights and hotels, view trip ideas, and use Asgardeo-powered account actions such as sign in, sign up, and sign out. The AI agent sample demonstrates how an agent can authenticate with Asgardeo, receive an agent token, and use that token to call protected MCP tools through LangChain over a `/chat` WebSocket endpoint.
 
 ## Project Structure
 
@@ -10,6 +10,7 @@ The application demonstrates a travel experience where users can search for flig
 asgardeo-b2c-sample-app/
 ├── frontend/        React + Vite web application
 ├── api/             Node.js REST API
+├── ai-agent/        LangChain WebSocket agent with Asgardeo agent authentication
 └── README.md        Project overview
 ```
 
@@ -47,9 +48,23 @@ api/openapi.yaml
 
 See `api/README.md` for setup, database seeding, and local run instructions.
 
+## AI Agent
+
+The `ai-agent/` app provides a local WebSocket sample for authenticating AI agents with Asgardeo.
+
+Main responsibilities:
+
+- Request an Asgardeo agent token using agent credentials
+- Connect to an MCP server with the agent token as a bearer token
+- Load MCP tools into a LangChain ReAct agent
+- Use Google Gemini as the chat model
+- Serve chat requests over `ws://localhost:8790/chat`
+
+See `ai-agent/README.md` for setup, environment variables, and local run instructions.
+
 ## Local Development
 
-Run the API and frontend in separate terminals.
+Run the API, frontend, and AI agent in separate terminals as needed.
 
 API:
 
@@ -68,11 +83,21 @@ npm install
 npm run dev
 ```
 
+AI agent:
+
+```bash
+cd ai-agent
+npm install
+npm start
+```
+
 Default local URLs:
 
 ```text
 Frontend: http://localhost:5173
 API:      http://localhost:8787
+Agent:    ws://localhost:8790/chat
+MCP:      http://localhost:8000/mcp
 ```
 
 ## Asgardeo Setup
@@ -94,3 +119,5 @@ VITE_ASGARDEO_BASE_URL=https://api.asgardeo.io/t/your-organization-name
 ```
 
 The API can run without token validation for local demos. To require Asgardeo access tokens for protected endpoints, enable the API auth settings in `api/.env`.
+
+For the AI agent, configure the Asgardeo application details, agent credentials, Gemini API key, and MCP server URL in the `.env` file described in `ai-agent/README.md`.

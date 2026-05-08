@@ -9,13 +9,29 @@ const dbPath = process.env.SQLITE_DB_PATH || defaultDbPath;
 
 let db;
 
+function ensureSchema(database) {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS bookings (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      username TEXT NOT NULL,
+      type TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      travelers INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+  `);
+}
+
 function getDatabase() {
   if (!existsSync(dbPath)) {
     throw new Error("SQLite database not found. Run `npm run seed` from the api directory.");
   }
 
   if (!db) {
-    db = new Database(dbPath, { readonly: true });
+    db = new Database(dbPath);
+    ensureSchema(db);
   }
 
   return db;
@@ -121,8 +137,125 @@ export function findHotels({ location, maxNightlyRate }) {
   return rows.map(mapHotel);
 }
 
-export function listTrips() {
-  const rows = getDatabase().prepare("SELECT * FROM trips ORDER BY title ASC").all();
+export function listTrips({ destination } = {}) {
+  const conditions = [];
+  const params = {};
+
+  if (destination) {
+    conditions.push("LOWER(destination) LIKE LOWER(@destination)");
+    params.destination = `%${destination}%`;
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const rows = getDatabase()
+    .prepare(`SELECT * FROM trips ${whereClause} ORDER BY total_estimate ASC`)
+    .all(params);
 
   return rows.map(mapTrip);
+}
+
+export function listLocations({ category } = {}) {
+  let query = `
+    SELECT from_city AS name, 'city' AS type FROM flights
+    UNION
+    SELECT to_city AS name, 'city' AS type FROM flights
+  `;
+
+  if (category === "hotels") {
+    query = `
+      SELECT location AS name, 'area' AS type FROM hotels
+    `;
+  }
+
+  if (category === "trips") {
+    query = `
+      SELECT destination AS name, 'destination' AS type FROM trips
+    `;
+  }
+
+  const rows = getDatabase()
+    .prepare(`SELECT DISTINCT name, type FROM (${query}) ORDER BY name ASC`)
+    .all();
+
+  return rows;
+}
+
+export function createBookingRecord({ id, user, type, itemId, travelers, status, createdAt }) {
+  const username = user.username || user.email || user.id;
+
+  getDatabase()
+    .prepare(
+      `
+        INSERT INTO bookings (
+          id,
+          user_id,
+          username,
+          type,
+          item_id,
+          travelers,
+          status,
+          created_at
+        ) VALUES (
+          @id,
+          @userId,
+          @username,
+          @type,
+          @itemId,
+          @travelers,
+          @status,
+          @createdAt
+        )
+      `
+    )
+    .run({
+      id,
+      userId: user.id,
+      username,
+      type,
+      itemId,
+      travelers,
+      status,
+      createdAt
+    });
+
+  return {
+    id,
+    userId: user.id,
+    username,
+    type,
+    itemId,
+    travelers,
+    status,
+    createdAt
+  };
+}
+
+export function listBookedFlights(username) {
+  const rows = getDatabase()
+    .prepare(
+      `
+        SELECT
+          bookings.id AS booking_id,
+          bookings.username,
+          bookings.travelers,
+          bookings.status,
+          bookings.created_at,
+          flights.*
+        FROM bookings
+        INNER JOIN flights ON bookings.item_id = flights.id
+        WHERE bookings.type = 'flight'
+          AND bookings.username = @username
+        ORDER BY bookings.created_at DESC
+      `
+    )
+    .all({ username });
+
+  return rows.map((row) => ({
+    id: row.booking_id,
+    username: row.username,
+    travelers: row.travelers,
+    status: row.status,
+    createdAt: row.created_at,
+    flight: mapFlight(row)
+  }));
 }

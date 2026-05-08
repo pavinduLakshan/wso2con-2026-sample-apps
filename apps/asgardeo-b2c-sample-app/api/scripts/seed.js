@@ -67,6 +67,81 @@ const flights = [
     cabin: "Economy",
     dates: "Jun 20 - Jun 26",
     tags: JSON.stringify(["Evening"])
+  },
+  {
+    id: "flight-cmb-sin-02",
+    from: "Colombo",
+    to: "Singapore",
+    airline: "IslandJet",
+    departure_time: "13:30",
+    arrival_time: "19:50",
+    duration: "3h 50m",
+    stops: 0,
+    price: 342,
+    currency: "USD",
+    cabin: "Economy",
+    dates: "Jun 12 - Jun 18",
+    tags: JSON.stringify(["Flexible ticket", "Carry-on included"])
+  },
+  {
+    id: "flight-cmb-sin-03",
+    from: "Colombo",
+    to: "Singapore",
+    airline: "Meridian Airways",
+    departure_time: "01:10",
+    arrival_time: "09:20",
+    duration: "5h 40m",
+    stops: 1,
+    price: 276,
+    currency: "USD",
+    cabin: "Economy",
+    dates: "Jun 12 - Jun 18",
+    tags: JSON.stringify(["Lowest price", "1 stop"])
+  },
+  {
+    id: "flight-cmb-tyo-01",
+    from: "Colombo",
+    to: "Tokyo",
+    airline: "Serendib Air",
+    departure_time: "07:25",
+    arrival_time: "22:10",
+    duration: "11h 15m",
+    stops: 1,
+    price: 598,
+    currency: "USD",
+    cabin: "Economy",
+    dates: "Jul 04 - Jul 16",
+    tags: JSON.stringify(["Good connection", "Meal included"])
+  },
+  {
+    id: "flight-dxb-lon-01",
+    from: "Dubai",
+    to: "London",
+    airline: "Gulfline",
+    departure_time: "09:40",
+    arrival_time: "14:35",
+    duration: "7h 55m",
+    stops: 0,
+    price: 431,
+    currency: "USD",
+    cabin: "Economy",
+    dates: "Sep 02 - Sep 09",
+    tags: JSON.stringify(["Nonstop", "Morning"])
+  },
+  {
+    id: "flight-sin-syd-01",
+    from: "Singapore",
+    to: "Sydney",
+    airline: "Pacifica",
+    departure_time: "20:15",
+    arrival_time: "06:05",
+    duration: "7h 50m",
+    stops: 0,
+    price: 502,
+    currency: "USD",
+    cabin: "Economy",
+    dates: "Oct 10 - Oct 18",
+    tags: JSON.stringify(["Overnight", "Nonstop"])
   }
 ];
 
@@ -106,6 +181,60 @@ const hotels = [
     currency: "USD",
     rating: 8.9,
     amenities: JSON.stringify(["Central location", "Breakfast", "Gym"])
+  },
+  {
+    id: "hotel-garden-quay",
+    name: "Garden Quay Hotel",
+    location: "Singapore Riverside",
+    nightly_rate: 128,
+    currency: "USD",
+    rating: 8.7,
+    amenities: JSON.stringify(["River view", "Metro nearby", "Breakfast"])
+  },
+  {
+    id: "hotel-orchid-house",
+    name: "Orchid House",
+    location: "Singapore Orchard",
+    nightly_rate: 156,
+    currency: "USD",
+    rating: 9.0,
+    amenities: JSON.stringify(["Family rooms", "Pool", "Shopping district"])
+  },
+  {
+    id: "hotel-shibuya-harbor",
+    name: "Shibuya Harbor",
+    location: "Tokyo Shibuya",
+    nightly_rate: 188,
+    currency: "USD",
+    rating: 9.2,
+    amenities: JSON.stringify(["Train access", "Compact suites", "Late checkout"])
+  },
+  {
+    id: "hotel-dubai-creek-lofts",
+    name: "Dubai Creek Lofts",
+    location: "Dubai Creek",
+    nightly_rate: 135,
+    currency: "USD",
+    rating: 8.6,
+    amenities: JSON.stringify(["Creek view", "Airport transfer", "Pool"])
+  },
+  {
+    id: "hotel-kings-cross-nest",
+    name: "Kings Cross Nest",
+    location: "London Kings Cross",
+    nightly_rate: 161,
+    currency: "USD",
+    rating: 8.5,
+    amenities: JSON.stringify(["Station nearby", "Breakfast", "Workspace"])
+  },
+  {
+    id: "hotel-darling-harbor-stay",
+    name: "Darling Harbor Stay",
+    location: "Sydney Darling Harbour",
+    nightly_rate: 149,
+    currency: "USD",
+    rating: 8.9,
+    amenities: JSON.stringify(["Harbor access", "Kitchenette", "Laundry"])
   }
 ];
 
@@ -129,6 +258,46 @@ const trips = [
     status: "saved",
     total_estimate: 525,
     currency: "USD"
+  },
+  {
+    id: "trip-tokyo-first-timer",
+    title: "Tokyo first-timer route",
+    destination: "Tokyo",
+    flight_id: "flight-cmb-tyo-01",
+    hotel_id: "hotel-shibuya-harbor",
+    status: "planning",
+    total_estimate: 1540,
+    currency: "USD"
+  },
+  {
+    id: "trip-singapore-family",
+    title: "Singapore family break",
+    destination: "Singapore",
+    flight_id: "flight-cmb-sin-02",
+    hotel_id: "hotel-orchid-house",
+    status: "saved",
+    total_estimate: 1278,
+    currency: "USD"
+  },
+  {
+    id: "trip-dubai-stopover",
+    title: "Dubai stopover",
+    destination: "Dubai",
+    flight_id: "flight-cmb-dxb-01",
+    hotel_id: "hotel-dubai-creek-lofts",
+    status: "planning",
+    total_estimate: 694,
+    currency: "USD"
+  },
+  {
+    id: "trip-london-week",
+    title: "London rail-and-city week",
+    destination: "London",
+    flight_id: "flight-dxb-lon-01",
+    hotel_id: "hotel-kings-cross-nest",
+    status: "saved",
+    total_estimate: 1558,
+    currency: "USD"
   }
 ];
 
@@ -142,6 +311,7 @@ db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
 db.exec(`
+  DROP TABLE IF EXISTS bookings;
   DROP TABLE IF EXISTS trips;
   DROP TABLE IF EXISTS hotels;
   DROP TABLE IF EXISTS flights;
@@ -183,6 +353,17 @@ db.exec(`
     currency TEXT NOT NULL,
     FOREIGN KEY (flight_id) REFERENCES flights(id),
     FOREIGN KEY (hotel_id) REFERENCES hotels(id)
+  );
+
+  CREATE TABLE bookings (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    type TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    travelers INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL
   );
 `);
 
