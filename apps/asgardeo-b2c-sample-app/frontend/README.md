@@ -33,11 +33,14 @@ Update the values:
 ```bash
 VITE_ASGARDEO_CLIENT_ID=your-asgardeo-application-client-id
 VITE_ASGARDEO_BASE_URL=https://api.asgardeo.io/t/your-organization-name
+VITE_API_BASE_URL=http://localhost:8787
 ```
 
 `VITE_ASGARDEO_CLIENT_ID` is the client ID of your Asgardeo application.
 
 `VITE_ASGARDEO_BASE_URL` is your Asgardeo organization base URL.
+
+`VITE_API_BASE_URL` is the local URL of the REST API in the `api/` folder.
 
 ## Run Locally
 
