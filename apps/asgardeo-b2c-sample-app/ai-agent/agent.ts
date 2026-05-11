@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 dotenv.config({
-    path: resolve(__dirname, "../../.env"),
+    path: resolve(__dirname, ".env"),
 });
 
 const asgardeoConfig = {
@@ -60,7 +60,7 @@ type ChatRequest = {
 
 type WebSocketFrame = {
     opcode: number;
-    payload: Buffer;
+    payload: Buffer<ArrayBufferLike>;
 };
 
 const WEB_SOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -143,7 +143,9 @@ function encodeWebSocketFrame(payload: string, opcode = 0x1): Buffer {
     return Buffer.concat([header, payloadBuffer]);
 }
 
-function parseWebSocketFrame(buffer: Buffer): { frame: WebSocketFrame; remaining: Buffer } | null {
+function parseWebSocketFrame(
+    buffer: Buffer<ArrayBufferLike>
+): { frame: WebSocketFrame; remaining: Buffer<ArrayBufferLike> } | null {
     if (buffer.length < 2) {
         return null;
     }
@@ -266,7 +268,7 @@ async function runAgentServer() {
         });
 
         let queue = Promise.resolve();
-        let buffer = Buffer.alloc(0);
+        let buffer: Buffer<ArrayBufferLike> = Buffer.alloc(0);
 
         socket.on("data", (data) => {
             buffer = Buffer.concat([buffer, data]);

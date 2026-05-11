@@ -21,30 +21,13 @@ cd ai-agent
 npm install
 ```
 
-Create a local environment file where the agent currently expects it:
+Create a local environment file from the example:
 
 ```bash
-cd ../..
-touch .env
+cp .env.example .env
 ```
 
-Add the following values:
-
-```bash
-CLIENT_ID=your-asgardeo-application-client-id
-ASGARDEO_BASE_URL=https://api.asgardeo.io/t/your-organization-name
-REDIRECT_URI=http://localhost:3000
-
-AGENT_ID=your-asgardeo-agent-id
-AGENT_SECRET=your-asgardeo-agent-secret
-
-GOOGLE_API_KEY=your-google-api-key
-MODEL_NAME=gemini-2.5-flash
-
-MCP_SERVER_URL=http://localhost:8000/mcp
-AGENT_PORT=8790
-HOST=localhost
-```
+Then update the values in `.env` for your local setup.
 
 Environment variables:
 
