@@ -1,8 +1,8 @@
 # Asgardeo B2C Sample App
 
-This repository contains a sample B2C travel booking application secured with Asgardeo. It is split into a React + Vite frontend, a Node.js REST API backed by SQLite, and a command-line AI agent sample.
+This repository contains a sample B2C travel booking application secured with Asgardeo. It is split into a React + Vite frontend, a Node.js REST API backed by SQLite, a TypeScript MCP server, and a WebSocket AI agent sample.
 
-The application demonstrates a travel experience where users can search for flights and hotels, view trip ideas, and use Asgardeo-powered account actions such as sign in, sign up, and sign out. The AI agent sample demonstrates how an agent can authenticate with Asgardeo, receive an agent token, and use that token to call protected MCP tools through LangChain over a `/chat` WebSocket endpoint.
+The application demonstrates a travel experience where users can search for flights and hotels, view trip ideas, and use Asgardeo-powered account actions such as sign in, sign up, and sign out. The MCP server wraps the travel REST API as tools. The AI agent sample demonstrates how an agent can authenticate with Asgardeo, receive an agent token, and use that token to call protected MCP tools through LangChain over a `/chat` WebSocket endpoint.
 
 ## Project Structure
 
@@ -10,6 +10,7 @@ The application demonstrates a travel experience where users can search for flig
 asgardeo-b2c-sample-app/
 ├── frontend/        React + Vite web application
 ├── api/             Node.js REST API
+├── mcp/             TypeScript MCP server that wraps the REST API
 ├── ai-agent/        LangChain WebSocket agent with Asgardeo agent authentication
 └── README.md        Project overview
 ```
@@ -48,6 +49,19 @@ api/openapi.yaml
 
 See `api/README.md` for setup, database seeding, and local run instructions.
 
+## MCP Server
+
+The `mcp/` app exposes the REST API as MCP tools for the AI agent.
+
+Main responsibilities:
+
+- Wrap flight, hotel, trip, location, booking, and profile endpoints as MCP tools
+- Serve MCP requests over Streamable HTTP at `/mcp`
+- Forward the incoming `Authorization` header to the REST API
+- Provide a local health endpoint
+
+See `mcp/README.md` for setup, tools, and local run instructions.
+
 ## AI Agent
 
 The `ai-agent/` app provides a local WebSocket sample for authenticating AI agents with Asgardeo.
@@ -83,6 +97,14 @@ npm install
 npm run dev
 ```
 
+MCP server:
+
+```bash
+cd mcp
+npm install
+npm start
+```
+
 AI agent:
 
 ```bash
@@ -96,8 +118,8 @@ Default local URLs:
 ```text
 Frontend: http://localhost:5173
 API:      http://localhost:8787
-Agent:    ws://localhost:8790/chat
 MCP:      http://localhost:8000/mcp
+Agent:    ws://localhost:8790/chat
 ```
 
 ## Asgardeo Setup
