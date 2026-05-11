@@ -230,6 +230,42 @@ export function createBookingRecord({ id, user, type, itemId, travelers, status,
   };
 }
 
+export function findDuplicateBooking({ username, type, itemId }) {
+  if (type !== "flight") {
+    return getDatabase()
+      .prepare(
+        `
+          SELECT id
+          FROM bookings
+          WHERE username = @username
+            AND type = @type
+            AND item_id = @itemId
+          LIMIT 1
+        `
+      )
+      .get({ username, type, itemId });
+  }
+
+  return getDatabase()
+    .prepare(
+      `
+        SELECT bookings.id
+        FROM bookings
+        INNER JOIN flights booked_flight ON bookings.item_id = booked_flight.id
+        INNER JOIN flights requested_flight ON requested_flight.id = @itemId
+        WHERE bookings.username = @username
+          AND bookings.type = 'flight'
+          AND booked_flight.from_city = requested_flight.from_city
+          AND booked_flight.to_city = requested_flight.to_city
+          AND booked_flight.departure_time = requested_flight.departure_time
+          AND booked_flight.arrival_time = requested_flight.arrival_time
+          AND booked_flight.dates = requested_flight.dates
+        LIMIT 1
+      `
+    )
+    .get({ username, itemId });
+}
+
 export function listBookedFlights(username) {
   const rows = getDatabase()
     .prepare(

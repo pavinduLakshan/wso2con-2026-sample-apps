@@ -5,6 +5,7 @@ import "dotenv/config";
 import { resolveUser } from "./auth.js";
 import {
   createBookingRecord,
+  findDuplicateBooking,
   findFlights,
   findHotels,
   listBookedFlights,
@@ -60,6 +61,7 @@ async function handleBooking(request) {
   const itemType = body.type;
   const itemId = body.itemId;
   const travelers = Number(body.travelers || 1);
+  const username = user.username || user.email || user.id;
 
   if (!["flight", "hotel", "trip"].includes(itemType)) {
     return {
@@ -72,6 +74,19 @@ async function handleBooking(request) {
     return {
       statusCode: 400,
       body: { error: "itemId is required" }
+    };
+  }
+
+  const duplicateBooking = findDuplicateBooking({
+    username,
+    type: itemType,
+    itemId
+  });
+
+  if (duplicateBooking) {
+    return {
+      statusCode: 409,
+      body: { error: "This booking already exists." }
     };
   }
 
