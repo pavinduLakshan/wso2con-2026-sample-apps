@@ -2000,6 +2000,15 @@ h2 {
   background: #f3f4f6;
 }
 
+.quick-bookings-section {
+  padding-top: 24px;
+}
+
+.quick-bookings-grid {
+  display: grid;
+  gap: 16px;
+}
+
 .dashboard-card {
   min-height: 240px;
   padding: 22px;
