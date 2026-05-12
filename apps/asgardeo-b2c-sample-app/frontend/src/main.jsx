@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { AsgardeoProvider } from "@asgardeo/react";
+import { BrowserRouter } from "react-router-dom";
 import App from "./App.jsx";
 import "./styles.css";
 
@@ -10,12 +11,14 @@ const asgardeoReady = Boolean(clientId && baseUrl);
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    {asgardeoReady ? (
-      <AsgardeoProvider clientId={clientId} baseUrl={baseUrl}>
-        <App authReady />
-      </AsgardeoProvider>
-    ) : (
-      <App authReady={false} />
-    )}
+    <BrowserRouter>
+      {asgardeoReady ? (
+        <AsgardeoProvider clientId={clientId} baseUrl={baseUrl}>
+          <App authReady />
+        </AsgardeoProvider>
+      ) : (
+        <App authReady={false} />
+      )}
+    </BrowserRouter>
   </StrictMode>
 );

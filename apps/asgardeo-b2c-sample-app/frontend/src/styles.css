@@ -2,8 +2,8 @@
   color: #111827;
   background: #ffffff;
   font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+    Aptos, "Avenir Next", "SF Pro Text", "Helvetica Neue", ui-sans-serif,
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -16,6 +16,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  font-weight: 400;
 }
 
 button,
@@ -77,7 +78,7 @@ a {
 
 .brand {
   gap: 10px;
-  font-weight: 800;
+  font-weight: 600;
   font-size: 1.08rem;
 }
 
@@ -89,7 +90,7 @@ a {
 .header-nav a,
 .header-link {
   color: #2563eb;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .header-nav a {
@@ -127,7 +128,7 @@ a {
   min-height: 42px;
   border: 0;
   border-radius: 8px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .text-button {
@@ -170,7 +171,7 @@ a {
   background: #ffffff;
   border: 0;
   border-radius: 8px;
-  font-weight: 800;
+  font-weight: 600;
   text-align: left;
 }
 
@@ -208,14 +209,14 @@ a {
   max-width: 100%;
   color: #111827;
   font-size: 0.94rem;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .user-chip-email {
   max-width: 100%;
   color: #5b6574;
   font-size: 0.76rem;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .account-menu-wrap {
@@ -246,7 +247,7 @@ a {
   background: transparent;
   border: 0;
   border-radius: 8px;
-  font-weight: 900;
+  font-weight: 700;
   text-align: left;
 }
 
@@ -265,7 +266,7 @@ a {
   background: #ffe8b7;
   border: 1px solid #e6b95d;
   border-radius: 8px;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .api-status {
@@ -275,7 +276,7 @@ a {
   background: #ffffff;
   border: 1px solid #2563eb;
   border-radius: 8px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .api-status--error {
@@ -289,11 +290,27 @@ a {
   grid-template-columns: minmax(0, 0.9fr) minmax(460px, 1.1fr);
   gap: clamp(28px, 5vw, 72px);
   align-items: center;
-  padding: clamp(48px, 7vw, 96px) clamp(20px, 5vw, 72px) 36px;
+  margin: 20px clamp(20px, 5vw, 72px) 0;
+  padding: clamp(42px, 6vw, 78px) clamp(20px, 5vw, 54px) 32px;
+  background: #eaf3ff;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 8px;
 }
 
 .hero-copy {
   max-width: 640px;
+}
+
+.hero--greeting {
+  grid-template-columns: 1fr;
+}
+
+.hero--greeting .hero-copy {
+  max-width: none;
+}
+
+.hero--greeting h1 {
+  white-space: nowrap;
 }
 
 .hero .search-panel--compact {
@@ -304,7 +321,7 @@ a {
   margin: 0 0 12px;
   color: #2563eb;
   font-size: 0.78rem;
-  font-weight: 900;
+  font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
 }
@@ -314,6 +331,13 @@ h2,
 h3,
 p {
   margin-top: 0;
+}
+
+h1,
+h2,
+h3,
+strong {
+  font-weight: 650;
 }
 
 h1 {
@@ -349,7 +373,7 @@ h1 {
 }
 
 .search-panel--compact {
-  padding: 10px;
+  padding: 12px;
   background: #061a33;
   border: 0;
   box-shadow: none;
@@ -357,16 +381,18 @@ h1 {
 
 .search-panel--compact .tabs {
   width: fit-content;
-  margin-bottom: 10px;
-  padding: 0;
-  background: transparent;
+  margin-bottom: 12px;
+  padding: 4px;
+  background: #0f2744;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .search-panel--compact .tab {
   flex: 0 0 auto;
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 40px;
+  padding: 0 16px;
   color: #dbeafe;
+  font-size: 0.94rem;
 }
 
 .search-panel--compact .tab--active {
@@ -375,19 +401,27 @@ h1 {
 }
 
 .search-panel--compact .trip-type {
-  margin: 0 0 10px;
+  width: fit-content;
+  margin: 0 0 12px;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
 }
 
 .search-panel--compact .pill {
-  min-height: 32px;
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.28);
+  min-height: 28px;
+  padding: 0 10px;
+  color: #bfd4f4;
+  background: transparent;
+  border-color: transparent;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .search-panel--compact .pill--selected {
-  color: #061a33;
-  background: #ffffff;
-  border-color: #ffffff;
+  color: #ffffff;
+  background: rgba(37, 99, 235, 0.72);
+  border-color: transparent;
 }
 
 .tabs {
@@ -408,7 +442,7 @@ h1 {
   border-radius: 8px;
   color: #53666a;
   background: transparent;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .tab {
@@ -462,16 +496,16 @@ h1 {
     minmax(160px, 1fr)
     minmax(150px, 0.85fr)
     minmax(190px, 1fr)
-    minmax(84px, auto);
+    minmax(118px, auto);
 }
 
 .search-panel--compact .search-grid--hotels,
 .search-panel--compact .search-grid--trips {
   grid-template-columns:
-    minmax(240px, 1.35fr)
-    minmax(160px, 0.8fr)
-    minmax(190px, 1fr)
-    minmax(84px, auto);
+    minmax(0, 1.35fr)
+    minmax(0, 0.8fr)
+    minmax(0, 1fr)
+    minmax(112px, auto);
 }
 
 .field {
@@ -500,7 +534,7 @@ h1 {
 .field span {
   color: #647276;
   font-size: 0.78rem;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .field-control {
@@ -519,7 +553,7 @@ h1 {
   background: transparent;
   border: 0;
   outline: 0;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .location-field {
@@ -579,7 +613,7 @@ h1 {
 
 .location-option small {
   color: #66767a;
-  font-weight: 800;
+  font-weight: 600;
   text-transform: capitalize;
 }
 
@@ -644,7 +678,7 @@ h1 {
   place-items: center;
   color: #182125;
   font-size: 1rem;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .calendar-day,
@@ -660,7 +694,7 @@ h1 {
   border: 0;
   border-radius: 0;
   font-size: 0.92rem;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .calendar-day--range {
@@ -686,7 +720,7 @@ h1 {
 .date-menu-footer span {
   color: #172225;
   font-size: 1.15rem;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .apply-button {
@@ -696,7 +730,7 @@ h1 {
   background: #2563eb;
   border: 0;
   border-radius: 8px;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .travelers-menu {
@@ -722,7 +756,7 @@ h1 {
 .traveler-row span,
 .travelers-menu p {
   color: #667079;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .traveler-row span {
@@ -779,9 +813,13 @@ h1 {
 
 .search-panel--compact .search-button {
   grid-column: auto;
-  min-width: 84px;
+  gap: 8px;
+  min-width: 112px;
   min-height: 72px;
+  padding: 0 18px;
   border-radius: 0 8px 8px 0;
+  font-size: 0.98rem;
+  white-space: nowrap;
 }
 
 .results-hero {
@@ -799,7 +837,7 @@ h1 {
 
 .results-hero p:last-child {
   color: #516166;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .results-section {
@@ -828,7 +866,7 @@ h1 {
 .bookings-heading p:last-child,
 .bookings-empty p:last-child {
   color: #516166;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .management-header,
@@ -853,7 +891,7 @@ h1 {
 .management-empty p:last-child {
   margin: 0;
   color: #5b6574;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .back-link {
@@ -862,7 +900,7 @@ h1 {
   align-items: center;
   margin-bottom: 18px;
   color: #2563eb;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .management-summary {
@@ -885,7 +923,7 @@ h1 {
   margin-bottom: 8px;
   color: #5b6574;
   font-size: 0.78rem;
-  font-weight: 900;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
@@ -923,7 +961,7 @@ h1 {
 .management-empty-state p {
   margin: 0;
   color: #5b6574;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .management-message {
@@ -958,7 +996,7 @@ h1 {
   background: #f9fafb;
   border-bottom: 1px solid rgba(17, 24, 39, 0.1);
   font-size: 0.76rem;
-  font-weight: 900;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
@@ -993,7 +1031,7 @@ h1 {
 .booking-cell span {
   overflow: hidden;
   color: #5b6574;
-  font-weight: 700;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1009,7 +1047,7 @@ h1 {
   background: #2563eb;
   border-radius: 8px;
   font-size: 0.72rem;
-  font-weight: 900;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
@@ -1059,6 +1097,7 @@ h1 {
 }
 
 .booking-flight-widget {
+  --booking-route-code-size: clamp(1.7rem, 4vw, 3rem);
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(200px, 260px);
   overflow: hidden;
@@ -1077,39 +1116,42 @@ h1 {
 }
 
 .booking-flight-widget .itinerary-route {
-  grid-template-rows: auto auto;
-  row-gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(92px, 0.35fr) minmax(0, 1fr);
+  align-items: end;
 }
 
 .booking-flight-widget .itinerary-route > div:not(.itinerary-line) {
-  display: contents;
+  display: grid;
+  gap: 8px;
 }
 
 .booking-flight-widget .itinerary-route > div:first-child span {
-  grid-column: 1;
-  grid-row: 1;
+  grid-column: auto;
+  grid-row: auto;
 }
 
 .booking-flight-widget .itinerary-route > div:first-child strong {
-  grid-column: 1;
-  grid-row: 2;
+  grid-column: auto;
+  grid-row: auto;
 }
 
 .booking-flight-widget .itinerary-line {
-  grid-column: 2;
-  grid-row: 2;
-  align-self: center;
+  grid-column: auto;
+  grid-row: auto;
+  align-self: end;
+  min-height: var(--booking-route-code-size);
+  height: var(--booking-route-code-size);
   transform: none;
 }
 
 .booking-flight-widget .itinerary-route > div:last-child span {
-  grid-column: 3;
-  grid-row: 1;
+  grid-column: auto;
+  grid-row: auto;
 }
 
 .booking-flight-widget .itinerary-route > div:last-child strong {
-  grid-column: 3;
-  grid-row: 2;
+  grid-column: auto;
+  grid-row: auto;
 }
 
 .wallet-qr-panel {
@@ -1127,7 +1169,7 @@ h1 {
 .wallet-qr-panel span {
   color: #fbbf24;
   font-size: 0.78rem;
-  font-weight: 900;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
@@ -1136,7 +1178,7 @@ h1 {
   margin: 0;
   color: #d1d5db;
   font-size: 0.9rem;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.45;
 }
 
@@ -1197,7 +1239,7 @@ h1 {
 .booking-detail-sections dt {
   color: #5b6574;
   font-size: 0.78rem;
-  font-weight: 900;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
@@ -1217,11 +1259,13 @@ h1 {
 
 .itinerary-line::before {
   position: absolute;
+  top: 50%;
   right: 0;
   left: 0;
   height: 2px;
   background: #2563eb;
   content: "";
+  transform: translateY(-50%);
 }
 
 .itinerary-line svg {
@@ -1229,6 +1273,43 @@ h1 {
   z-index: 1;
   padding: 4px;
   background: #ffffff;
+}
+
+@media (min-width: 901px) {
+  .itinerary-route {
+    grid-template-rows: auto auto;
+    row-gap: 8px;
+  }
+
+  .itinerary-route > div:not(.itinerary-line) {
+    display: contents;
+  }
+
+  .itinerary-route > div:first-child span {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .itinerary-route > div:first-child strong {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .itinerary-line {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: center;
+  }
+
+  .itinerary-route > div:last-child span {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .itinerary-route > div:last-child strong {
+    grid-column: 3;
+    grid-row: 2;
+  }
 }
 
 .itinerary-meta {
@@ -1243,7 +1324,7 @@ h1 {
   color: #111827;
   background: #f3f4f6;
   border-radius: 8px;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .booking-receipt-card {
@@ -1284,14 +1365,14 @@ h1 {
 .flight-review-summary dt {
   color: #fbbf24;
   font-size: 0.78rem;
-  font-weight: 900;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
 .flight-review-summary dd {
   margin: 0;
   color: #ffffff;
-  font-weight: 900;
+  font-weight: 700;
   overflow-wrap: anywhere;
 }
 
@@ -1307,7 +1388,7 @@ h1 {
 .booking-receipt-card p {
   margin: 0;
   color: #d1d5db;
-  font-weight: 800;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
@@ -1320,7 +1401,7 @@ h1 {
   background: #fbbf24;
   border: 0;
   border-radius: 8px;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .flight-review-confirm {
@@ -1374,7 +1455,7 @@ h1 {
 .booking-detail-sections dd {
   margin: 0;
   color: #111827;
-  font-weight: 900;
+  font-weight: 700;
   text-align: right;
   overflow-wrap: anywhere;
 }
@@ -1404,7 +1485,7 @@ h1 {
 .travel-insurance-section span {
   color: #2563eb;
   font-size: 0.78rem;
-  font-weight: 900;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
@@ -1417,7 +1498,7 @@ h1 {
   max-width: 620px;
   margin: 0;
   color: #5b6574;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.45;
 }
 
@@ -1428,7 +1509,7 @@ h1 {
   background: #fbbf24;
   border: 0;
   border-radius: 8px;
-  font-weight: 900;
+  font-weight: 700;
   white-space: nowrap;
 }
 
@@ -1462,7 +1543,7 @@ h1 {
 .payment-field span {
   color: #5b6574;
   font-size: 0.78rem;
-  font-weight: 900;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
@@ -1474,7 +1555,7 @@ h1 {
   border: 1px solid rgba(17, 24, 39, 0.12);
   border-radius: 8px;
   outline: 0;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .standalone-button {
@@ -1502,14 +1583,14 @@ h1 {
 .result-card p {
   margin-bottom: 0;
   color: #66767a;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .result-label {
   margin-bottom: 8px;
   color: #2563eb;
   font-size: 0.78rem;
-  font-weight: 900;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
@@ -1527,7 +1608,7 @@ h1 {
   border: 1px solid #2563eb;
   border-radius: 8px;
   font-size: 0.82rem;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .result-side {
@@ -1543,7 +1624,7 @@ h1 {
 
 .result-side span {
   color: #66767a;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .insight-strip {
@@ -1561,7 +1642,7 @@ h1 {
   background: #ffffff;
   border: 1px solid rgba(17, 24, 39, 0.1);
   border-radius: 8px;
-  font-weight: 900;
+  font-weight: 700;
   box-shadow: 0 18px 50px rgba(17, 24, 39, 0.06);
 }
 
@@ -1578,7 +1659,7 @@ h1 {
 .insight-strip small {
   color: #667085;
   font-size: 0.92rem;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.45;
 }
 
@@ -1616,7 +1697,7 @@ h2 {
 .empty-state {
   margin: 0;
   color: #66767a;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .empty-state--light {
@@ -1667,7 +1748,7 @@ h2 {
 
 .deal-card p {
   margin-bottom: 10px;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .deal-card h3 {
@@ -1680,7 +1761,7 @@ h2 {
 .deal-card span {
   display: block;
   margin-bottom: 18px;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .deal-card strong {
@@ -1693,7 +1774,7 @@ h2 {
 .inline-action {
   border: 0;
   border-radius: 8px;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .card-action {
@@ -1762,7 +1843,7 @@ h2 {
 
 .stay-card p {
   margin-bottom: 0;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .stay-meta {
@@ -1780,7 +1861,7 @@ h2 {
   color: #ffffff;
   background: #2563eb;
   border-radius: 8px;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .faq-section {
@@ -1806,7 +1887,7 @@ h2 {
   color: #111827;
   cursor: pointer;
   font-size: 1.05rem;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .faq-item summary::marker {
@@ -1816,7 +1897,7 @@ h2 {
 .faq-item p {
   margin: 14px 0 0;
   color: #667085;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.55;
 }
 
@@ -1845,7 +1926,7 @@ h2 {
   margin: 0;
   color: #5b6574;
   font-size: 1.08rem;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.6;
 }
 
@@ -1882,7 +1963,7 @@ h2 {
 .dashboard-profile span {
   color: #5b6574;
   font-size: 0.86rem;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .dashboard-grid {
@@ -1911,7 +1992,7 @@ h2 {
   margin-bottom: 14px;
   color: #2563eb;
   font-size: 0.78rem;
-  font-weight: 900;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
@@ -1928,7 +2009,7 @@ h2 {
 .dashboard-card p {
   margin-bottom: 20px;
   color: #5b6574;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.55;
 }
 
@@ -1944,7 +2025,7 @@ h2 {
   min-height: 42px;
   padding: 0 14px;
   border-radius: 8px;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .dashboard-action {
@@ -1988,7 +2069,7 @@ h2 {
   max-width: 420px;
   margin: 0;
   color: #adc4ca;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .footer-links {
@@ -2003,7 +2084,7 @@ h2 {
   padding: 9px 12px;
   color: #d9edf0;
   border-radius: 8px;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .footer-links a:hover {
@@ -2074,7 +2155,7 @@ h2 {
   margin-bottom: 4px;
   color: #fbbf24;
   font-size: 0.72rem;
-  font-weight: 900;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
@@ -2098,7 +2179,7 @@ h2 {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   font-size: 0.72rem;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .chat-status--connected {
@@ -2143,7 +2224,7 @@ h2 {
   padding: 10px 12px;
   border-radius: 8px;
   font-size: 0.94rem;
-  font-weight: 750;
+  font-weight: 600;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -2205,7 +2286,7 @@ h2 {
   border: 1px solid rgba(17, 24, 39, 0.12);
   border-radius: 8px;
   outline: 0;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .chat-input-label input:focus {
@@ -2273,16 +2354,18 @@ h2 {
   }
 
   .booking-flight-widget {
+    --booking-route-code-size: clamp(1.35rem, 4vw, 2.2rem);
     grid-template-columns: minmax(0, 1fr) minmax(150px, 180px);
   }
 
   .booking-flight-widget .itinerary-route {
-    grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(44px, 0.28fr) minmax(0, 1fr);
     gap: 10px;
   }
 
   .booking-flight-widget .itinerary-line {
-    min-height: 34px;
+    min-height: var(--booking-route-code-size);
+    height: var(--booking-route-code-size);
     justify-items: center;
   }
 
@@ -2412,11 +2495,21 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .search-panel--compact .search-grid--hotels,
+  .search-panel--compact .search-grid--trips {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.82fr) minmax(0, 0.95fr) minmax(88px, auto);
+  }
+
   .search-panel--compact .field,
   .search-panel--compact .search-grid > .field:first-child,
   .search-panel--compact .search-button {
     min-height: 58px;
     border-radius: 8px;
+  }
+
+  .search-panel--compact .search-button {
+    min-width: 88px;
+    padding: 0 10px;
   }
 
   .results-section {
@@ -2521,6 +2614,7 @@ h2 {
   }
 
   .booking-flight-widget {
+    --booking-route-code-size: clamp(1.05rem, 6vw, 1.45rem);
     grid-template-columns: minmax(0, 1fr) 116px;
   }
 
@@ -2535,11 +2629,13 @@ h2 {
   }
 
   .booking-flight-widget .itinerary-route {
-    grid-template-columns: minmax(0, 1fr) 30px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(30px, 0.24fr) minmax(0, 1fr);
     gap: 6px;
   }
 
   .booking-flight-widget .itinerary-line {
+    min-height: var(--booking-route-code-size);
+    height: var(--booking-route-code-size);
     transform: none;
   }
 
