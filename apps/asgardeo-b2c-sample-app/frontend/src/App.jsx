@@ -543,7 +543,6 @@ function GuestCDSProfileBootstrap({ cdsProfileId, onProfileCreated }) {
   return null;
 }
 
-function AppRoutes({ authReady, cdsProfileId, criteria, locations, onSearch }) {
 function RootRoute({ authReady, locations, onSearch }) {
   const location = useLocation();
 
@@ -561,7 +560,7 @@ function RootRoute({ authReady, locations, onSearch }) {
   );
 }
 
-function AppRoutes({ authReady, criteria, locations, onSearch }) {
+function AppRoutes({ authReady, cdsProfileId, criteria, locations, onSearch }) {
   return (
     <Routes>
       <Route
