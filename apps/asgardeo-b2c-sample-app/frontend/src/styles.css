@@ -1627,6 +1627,32 @@ h1 {
   font-weight: 600;
 }
 
+.favorite-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  color: #d1d5db;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.favorite-button:hover {
+  color: #ef4444;
+}
+
+.favorite-button--active {
+  color: #ef4444;
+}
+
+.favorite-button--active svg {
+  fill: currentColor;
+}
+
 .insight-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

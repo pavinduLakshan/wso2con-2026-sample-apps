@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { getLocations } from "./api";
+import { clearCDSCookies, ensureCDSProfile, initializeCDSFromCookie } from "./cds-api";
 import { BookingDetailsPageWithAuth } from "./pages/BookingDetailsPageWithAuth";
 import { BookingsPageWithAuth } from "./pages/BookingsPageWithAuth";
 import { BookingsUnavailable } from "./pages/BookingsUnavailable";
@@ -147,7 +148,10 @@ function LiveAuthHeader() {
               className="account-menu-item"
               type="button"
               role="menuitem"
-              onClick={() => signOut()}
+              onClick={() => {
+                clearCDSCookies();
+                signOut();
+              }}
             >
               <LogOut size={18} />
               <span>Sign Out</span>
@@ -462,7 +466,78 @@ function LandingRoute({ authReady, category, locations, onSearch }) {
   return <HomePage category={category} locations={locations} onSearch={onSearch} />;
 }
 
-function AppRoutes({ authReady, criteria, locations, onSearch }) {
+function LiveCDSProfileBootstrap({ cdsProfileId, onProfileCreated }) {
+  const { isLoading, isSignedIn } = useAsgardeo();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.pathname !== "/flights" || location.hash || cdsProfileId) {
+      return;
+    }
+
+    if (isLoading || isSignedIn) {
+      return;
+    }
+
+    let isCurrent = true;
+
+    async function createCDSProfileOnMount() {
+      try {
+        const profile = await ensureCDSProfile({});
+        const createdProfileId = profile?.profile_id || profile?.id;
+
+        if (isCurrent && createdProfileId) {
+          onProfileCreated(createdProfileId);
+        }
+      } catch (error) {
+        console.warn("Failed to create CDS profile:", error.message);
+      }
+    }
+
+    createCDSProfileOnMount();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [cdsProfileId, isLoading, isSignedIn, location.hash, location.pathname, onProfileCreated]);
+
+  return null;
+}
+
+function GuestCDSProfileBootstrap({ cdsProfileId, onProfileCreated }) {
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.pathname !== "/flights" || location.hash || cdsProfileId) {
+      return;
+    }
+
+    let isCurrent = true;
+
+    async function createCDSProfileOnMount() {
+      try {
+        const profile = await ensureCDSProfile({});
+        const createdProfileId = profile?.profile_id || profile?.id;
+
+        if (isCurrent && createdProfileId) {
+          onProfileCreated(createdProfileId);
+        }
+      } catch (error) {
+        console.warn("Failed to create CDS profile:", error.message);
+      }
+    }
+
+    createCDSProfileOnMount();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [cdsProfileId, location.hash, location.pathname, onProfileCreated]);
+
+  return null;
+}
+
+function AppRoutes({ authReady, cdsProfileId, criteria, locations, onSearch }) {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/flights" replace />} />
@@ -503,9 +578,19 @@ function AppRoutes({ authReady, criteria, locations, onSearch }) {
         path="/results"
         element={
           authReady ? (
-            <ResultsPageWithAuth criteria={criteria} locations={locations} onSearch={onSearch} />
+            <ResultsPageWithAuth
+              cdsProfileId={cdsProfileId}
+              criteria={criteria}
+              locations={locations}
+              onSearch={onSearch}
+            />
           ) : (
-            <ResultsPage criteria={criteria} locations={locations} onSearch={onSearch} />
+            <ResultsPage
+              cdsProfileId={cdsProfileId}
+              criteria={criteria}
+              locations={locations}
+              onSearch={onSearch}
+            />
           )
         }
       />
@@ -530,6 +615,7 @@ function AppRoutes({ authReady, criteria, locations, onSearch }) {
 function App({ authReady }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [cdsProfileId, setCdsProfileId] = useState(() => initializeCDSFromCookie() || null);
   const [locations, setLocations] = useState({
     flights: [],
     hotels: [],
@@ -613,8 +699,15 @@ function App({ authReady }) {
         </div>
       )}
 
+      {authReady ? (
+        <LiveCDSProfileBootstrap cdsProfileId={cdsProfileId} onProfileCreated={setCdsProfileId} />
+      ) : (
+        <GuestCDSProfileBootstrap cdsProfileId={cdsProfileId} onProfileCreated={setCdsProfileId} />
+      )}
+
       <AppRoutes
         authReady={authReady}
+        cdsProfileId={cdsProfileId}
         criteria={criteria}
         locations={locations}
         onSearch={handleSearch}

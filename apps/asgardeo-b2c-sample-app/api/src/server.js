@@ -17,11 +17,65 @@ import {
 const port = Number(process.env.PORT || 8787);
 const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
 
+async function getCDSToken() {
+  const baseUrl = process.env.ASGARDEO_BASE_URL;
+  const clientId = process.env.CDS_ASGARDEO_CLIENT_ID;
+  const clientSecret = process.env.CDS_ASGARDEO_CLIENT_SECRET;
+
+  if (!baseUrl || !clientId || !clientSecret) {
+    throw new Error("Missing CDS credentials in environment");
+  }
+
+  const tokenEndpoint = `${baseUrl.replace(/\/$/, "")}/oauth2/token`;
+  const encodedCredentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+  const scopes = (process.env.CC_SCOPES || "").replace(/^\s*"|"\s*$/g, "").trim();
+
+  const response = await fetch(tokenEndpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Basic ${encodedCredentials}`
+    },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      ...(scopes && { scope: scopes })
+    }).toString()
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || !data.access_token) {
+    throw new Error(data.error_description || "Failed to get CDS token");
+  }
+
+  return data.access_token;
+}
+
+function extractCookieValue(setCookieHeaders, cookieName) {
+  for (const headerValue of setCookieHeaders) {
+    const firstPart = String(headerValue || "").split(";")[0] || "";
+    const eqIndex = firstPart.indexOf("=");
+
+    if (eqIndex <= 0) {
+      continue;
+    }
+
+    const name = firstPart.slice(0, eqIndex).trim();
+    const value = firstPart.slice(eqIndex + 1).trim();
+
+    if (name === cookieName) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
 function sendJson(response, statusCode, body) {
   response.writeHead(statusCode, {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": frontendOrigin,
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type,Authorization"
   });
   response.end(JSON.stringify(body));
@@ -184,6 +238,110 @@ async function route(request, response) {
       const result = await handleBooking(request);
 
       return sendJson(response, result.statusCode, result.body);
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/cds/profiles") {
+      const body = await readJsonBody(request);
+      const token = await getCDSToken();
+      const cdsEndpoint = `${process.env.ASGARDEO_BASE_URL.replace(/\/$/, "")}/cds/api/v1/profiles`;
+
+      const cdsResponse = await fetch(cdsEndpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      });
+
+      const cdsData = await cdsResponse.json().catch(() => ({}));
+
+      if (!cdsResponse.ok) {
+        return sendJson(response, cdsResponse.status, {
+          error: cdsData.message || cdsData.description || "Failed to create CDS profile"
+        });
+      }
+
+      const rawSetCookies =
+        typeof cdsResponse.headers.getSetCookie === "function"
+          ? cdsResponse.headers.getSetCookie()
+          : [];
+      const singleSetCookie = cdsResponse.headers.get("set-cookie");
+      const setCookieHeaders =
+        rawSetCookies.length > 0
+          ? rawSetCookies
+          : singleSetCookie
+            ? [singleSetCookie]
+            : [];
+      const cdsProfileCookie = extractCookieValue(setCookieHeaders, "cds_profile");
+
+      return sendJson(response, 201, {
+        ...cdsData,
+        cds_profile: cdsProfileCookie
+      });
+    }
+
+    if (request.method === "GET" && url.pathname.startsWith("/api/cds/profiles/")) {
+      const profileId = url.pathname.split("/").pop();
+      const token = await getCDSToken();
+      const cdsEndpoint = new URL(
+        `${process.env.ASGARDEO_BASE_URL.replace(/\/$/, "")}/cds/api/v1/profiles/${profileId}`
+      );
+
+      const applicationIdentifier = url.searchParams.get("application_identifier");
+      const includeApplicationData = url.searchParams.get("includeApplicationData");
+
+      if (applicationIdentifier) {
+        cdsEndpoint.searchParams.set("application_identifier", applicationIdentifier);
+      }
+
+      if (includeApplicationData) {
+        cdsEndpoint.searchParams.set("includeApplicationData", includeApplicationData);
+      }
+
+      const cdsResponse = await fetch(cdsEndpoint, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json"
+        }
+      });
+
+      const cdsData = await cdsResponse.json().catch(() => ({}));
+
+      if (!cdsResponse.ok) {
+        return sendJson(response, cdsResponse.status, {
+          error: cdsData.error_description || cdsData.error || "Failed to fetch CDS profile"
+        });
+      }
+
+      return sendJson(response, 200, cdsData);
+    }
+
+    if (request.method === "PATCH" && url.pathname.startsWith("/api/cds/profiles/")) {
+      const profileId = url.pathname.split("/").pop();
+      const body = await readJsonBody(request);
+      const token = await getCDSToken();
+      const cdsEndpoint = `${process.env.ASGARDEO_BASE_URL.replace(/\/$/, "")}/cds/api/v1/profiles/${profileId}`;
+
+      const cdsResponse = await fetch(cdsEndpoint, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      });
+
+      const cdsData = await cdsResponse.json().catch(() => ({}));
+
+      if (!cdsResponse.ok) {
+        return sendJson(response, cdsResponse.status, {
+          error: cdsData.error_description || cdsData.error || "Failed to update CDS profile"
+        });
+      }
+
+      return sendJson(response, 200, cdsData);
     }
 
     return sendJson(response, 404, { error: "Route not found" });
