@@ -464,9 +464,16 @@ function BookingDetailsRoute() {
   return <BookingDetailsPageWithAuth bookingId={bookingId} />;
 }
 
-function LandingRoute({ authReady, category, locations, onSearch }) {
+function LandingRoute({ authReady, category, cdsProfileId, locations, onSearch }) {
   if (authReady) {
-    return <SignedInHomePage category={category} locations={locations} onSearch={onSearch} />;
+    return (
+      <SignedInHomePage
+        category={category}
+        cdsProfileId={cdsProfileId}
+        locations={locations}
+        onSearch={onSearch}
+      />
+    );
   }
 
   return <HomePage category={category} locations={locations} onSearch={onSearch} />;
@@ -543,7 +550,7 @@ function GuestCDSProfileBootstrap({ cdsProfileId, onProfileCreated }) {
   return null;
 }
 
-function RootRoute({ authReady, locations, onSearch }) {
+function RootRoute({ authReady, cdsProfileId, locations, onSearch }) {
   const location = useLocation();
 
   if (!hasAsgardeoCallbackParams(location.search)) {
@@ -554,6 +561,7 @@ function RootRoute({ authReady, locations, onSearch }) {
     <LandingRoute
       authReady={authReady}
       category="flights"
+      cdsProfileId={cdsProfileId}
       locations={locations}
       onSearch={onSearch}
     />
@@ -565,7 +573,14 @@ function AppRoutes({ authReady, cdsProfileId, criteria, locations, onSearch }) {
     <Routes>
       <Route
         path="/"
-        element={<RootRoute authReady={authReady} locations={locations} onSearch={onSearch} />}
+        element={
+          <RootRoute
+            authReady={authReady}
+            cdsProfileId={cdsProfileId}
+            locations={locations}
+            onSearch={onSearch}
+          />
+        }
       />
       <Route
         path="/flights"
@@ -573,6 +588,7 @@ function AppRoutes({ authReady, cdsProfileId, criteria, locations, onSearch }) {
           <LandingRoute
             authReady={authReady}
             category="flights"
+            cdsProfileId={cdsProfileId}
             locations={locations}
             onSearch={onSearch}
           />
@@ -584,6 +600,7 @@ function AppRoutes({ authReady, cdsProfileId, criteria, locations, onSearch }) {
           <LandingRoute
             authReady={authReady}
             category="hotels"
+            cdsProfileId={cdsProfileId}
             locations={locations}
             onSearch={onSearch}
           />
@@ -595,6 +612,7 @@ function AppRoutes({ authReady, cdsProfileId, criteria, locations, onSearch }) {
           <LandingRoute
             authReady={authReady}
             category="trips"
+            cdsProfileId={cdsProfileId}
             locations={locations}
             onSearch={onSearch}
           />
