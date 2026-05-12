@@ -58,6 +58,12 @@ function createChatMessage(role, content) {
   };
 }
 
+function hasAsgardeoCallbackParams(search) {
+  const params = new URLSearchParams(search);
+
+  return Boolean((params.get("code") && params.get("state")) || params.get("error"));
+}
+
 function AuthenticatedHeader({ authReady }) {
   if (!authReady) {
     return <SignedOutHeader disabled />;
@@ -538,9 +544,30 @@ function GuestCDSProfileBootstrap({ cdsProfileId, onProfileCreated }) {
 }
 
 function AppRoutes({ authReady, cdsProfileId, criteria, locations, onSearch }) {
+function RootRoute({ authReady, locations, onSearch }) {
+  const location = useLocation();
+
+  if (!hasAsgardeoCallbackParams(location.search)) {
+    return <Navigate to="/flights" replace />;
+  }
+
+  return (
+    <LandingRoute
+      authReady={authReady}
+      category="flights"
+      locations={locations}
+      onSearch={onSearch}
+    />
+  );
+}
+
+function AppRoutes({ authReady, criteria, locations, onSearch }) {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/flights" replace />} />
+      <Route
+        path="/"
+        element={<RootRoute authReady={authReady} locations={locations} onSearch={onSearch} />}
+      />
       <Route
         path="/flights"
         element={
