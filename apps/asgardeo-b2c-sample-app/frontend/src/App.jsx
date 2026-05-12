@@ -8,23 +8,28 @@ import {
   ChevronRight,
   CircleUserRound,
   Clock3,
+  CreditCard,
   Hotel,
   LifeBuoy,
   LogOut,
   MapPin,
+  MessageCircle,
   Minus,
   Plane,
   Plus,
   Search,
+  Send,
   ShieldCheck,
   Sparkles,
   Star,
-  UsersRound
+  UsersRound,
+  X
 } from "lucide-react";
-import { SignUpButton, useAsgardeo } from "@asgardeo/react";
+import { useAsgardeo } from "@asgardeo/react";
 import {
   createBooking,
   getBookedFlights,
+  getFlight,
   getFlights,
   getHotels,
   getLocations,
@@ -38,6 +43,42 @@ function getCurrentLocation() {
   };
 }
 
+const AGENT_CHAT_URL = import.meta.env.VITE_AGENT_CHAT_URL || "ws://localhost:8790/chat";
+const ASGARDEO_BASE_URL = import.meta.env.VITE_ASGARDEO_BASE_URL || "";
+const ASGARDEO_ORG_NAME = getAsgardeoOrgName();
+const SIGN_UP_URL = ASGARDEO_ORG_NAME
+  ? `https://accounts.asgardeo.io/t/${encodeURIComponent(ASGARDEO_ORG_NAME)}/accounts/register`
+  : "https://accounts.asgardeo.io/accounts/register";
+
+function getAsgardeoOrgName() {
+  const configuredOrgName = import.meta.env.VITE_ASGARDEO_ORG_NAME?.trim();
+
+  if (configuredOrgName) {
+    return configuredOrgName;
+  }
+
+  if (!ASGARDEO_BASE_URL) {
+    return "";
+  }
+
+  try {
+    const pathParts = new URL(ASGARDEO_BASE_URL).pathname.split("/").filter(Boolean);
+    const tenantIndex = pathParts.indexOf("t");
+
+    return tenantIndex >= 0 ? pathParts[tenantIndex + 1] || "" : "";
+  } catch {
+    return "";
+  }
+}
+
+function createChatMessage(role, content) {
+  return {
+    id: `${role}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    role,
+    content
+  };
+}
+
 function AuthenticatedHeader({ authReady }) {
   if (!authReady) {
     return <SignedOutHeader disabled />;
@@ -46,12 +87,40 @@ function AuthenticatedHeader({ authReady }) {
   return <LiveAuthHeader />;
 }
 
+function PrimaryNav({ authReady }) {
+  if (!authReady) {
+    return <PublicPrimaryNav />;
+  }
+
+  return <LivePrimaryNav />;
+}
+
+function PublicPrimaryNav() {
+  return (
+    <nav className="header-nav" aria-label="Primary navigation">
+      <a href="/#search">Search</a>
+      <a href="/#deals">Deals</a>
+      <a href="/#faq">FAQ</a>
+    </nav>
+  );
+}
+
+function LivePrimaryNav() {
+  const { isSignedIn } = useAsgardeo();
+
+  if (isSignedIn) {
+    return <span aria-hidden="true" />;
+  }
+
+  return <PublicPrimaryNav />;
+}
+
 function LiveAuthHeader() {
   const { isSignedIn, isLoading, signIn, signOut, user } = useAsgardeo();
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef(null);
-  const firstName = user?.given_name || user?.givenname || user?.givenName || user?.firstName || "";
-  const lastName = user?.family_name || user?.familyname || user?.familyName || user?.lastName || "";
+  const firstName = user?.name?.givenName || "";
+  const lastName = user?.name?.familyName || "";
   const fullName = `${firstName} ${lastName}`.trim();
   const email = user?.email || user?.mail || user?.username || user?.userName || "";
   const displayName = fullName || email || user?.sub || "Traveler";
@@ -121,7 +190,9 @@ function LiveAuthHeader() {
       >
         Sign in
       </button>
-      <SignUpButton className="primary-small">Sign up</SignUpButton>
+      <a className="primary-small" href={SIGN_UP_URL}>
+        Sign up
+      </a>
     </div>
   );
 }
@@ -424,7 +495,7 @@ function TravelersField({ defaultValue, isOpen, onOpen, onClose }) {
   );
 }
 
-function SearchPanel({ initialCriteria, locations, onSearch }) {
+function SearchPanel({ compact = false, initialCriteria, locations, onSearch }) {
   const [category, setCategory] = useState(initialCriteria?.category || "flights");
   const [tripType, setTripType] = useState(initialCriteria?.tripType || "round-trip");
   const [openDropdown, setOpenDropdown] = useState(null);
@@ -456,7 +527,7 @@ function SearchPanel({ initialCriteria, locations, onSearch }) {
 
     onSearch({
       category,
-      tripType,
+      tripType: category === "flights" ? tripType : "",
       from: formData.get("from"),
       to: formData.get("to"),
       dates: formData.get("dates"),
@@ -468,7 +539,11 @@ function SearchPanel({ initialCriteria, locations, onSearch }) {
   const destinationPlaceholder = isHotelSearch ? "Choose area" : "Choose destination";
 
   return (
-    <section className="search-panel" ref={panelRef} aria-label="Search travel">
+    <section
+      className={`search-panel ${compact ? "search-panel--compact" : ""}`}
+      ref={panelRef}
+      aria-label="Search travel"
+    >
       <div className="tabs" aria-label="Booking type">
         <button
           className={`tab ${category === "flights" ? "tab--active" : ""}`}
@@ -496,31 +571,33 @@ function SearchPanel({ initialCriteria, locations, onSearch }) {
         </button>
       </div>
 
-      <div className="trip-type">
-        <button
-          className={`pill ${tripType === "round-trip" ? "pill--selected" : ""}`}
-          type="button"
-          onClick={() => setTripType("round-trip")}
-        >
-          Round trip
-        </button>
-        <button
-          className={`pill ${tripType === "one-way" ? "pill--selected" : ""}`}
-          type="button"
-          onClick={() => setTripType("one-way")}
-        >
-          One way
-        </button>
-        <button
-          className={`pill ${tripType === "multi-city" ? "pill--selected" : ""}`}
-          type="button"
-          onClick={() => setTripType("multi-city")}
-        >
-          Multi-city
-        </button>
-      </div>
+      {category === "flights" && (
+        <div className="trip-type">
+          <button
+            className={`pill ${tripType === "round-trip" ? "pill--selected" : ""}`}
+            type="button"
+            onClick={() => setTripType("round-trip")}
+          >
+            Round trip
+          </button>
+          <button
+            className={`pill ${tripType === "one-way" ? "pill--selected" : ""}`}
+            type="button"
+            onClick={() => setTripType("one-way")}
+          >
+            One way
+          </button>
+          <button
+            className={`pill ${tripType === "multi-city" ? "pill--selected" : ""}`}
+            type="button"
+            onClick={() => setTripType("multi-city")}
+          >
+            Multi-city
+          </button>
+        </div>
+      )}
 
-      <form className="search-grid" onSubmit={handleSubmit}>
+      <form className={`search-grid search-grid--${category}`} onSubmit={handleSubmit}>
         {!isHotelSearch && (
           <LocationField
             defaultValue={initialCriteria?.from || "Colombo"}
@@ -591,6 +668,34 @@ function buildResultsPath(criteria) {
   return `/results?${params.toString()}`;
 }
 
+function buildFlightDetailsPath(flightId, criteria = {}) {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(criteria)) {
+    if (value) {
+      params.set(key, value);
+    }
+  }
+
+  const query = params.toString();
+
+  return `/flights/${encodeURIComponent(flightId)}${query ? `?${query}` : ""}`;
+}
+
+function buildFlightPaymentPath(flightId, criteria = {}) {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(criteria)) {
+    if (value) {
+      params.set(key, value);
+    }
+  }
+
+  const query = params.toString();
+
+  return `/payment/flight/${encodeURIComponent(flightId)}${query ? `?${query}` : ""}`;
+}
+
 function HomePage({ locations, onSearch }) {
   const highlights = [
     {
@@ -639,20 +744,36 @@ function HomePage({ locations, onSearch }) {
 
   const faqs = [
     {
-      question: "Can I search without signing in?",
-      answer: "Yes. You can explore flights, hotels, and trips first. Sign in when you want to save or book."
+      question: "How does Skyscanner work?",
+      answer: "We’re a flight, car hire and hotel search engine. We scan all the top airlines and travel providers across the net, so you can compare flight fares and other travel costs in one place. Once you’ve found the best flight, car hire or hotel, you book directly with the provider."
     },
     {
-      question: "What does Asgardeo protect here?",
-      answer: "Asgardeo handles the account experience for sign in, sign up, sign out, and authenticated booking actions."
+      question: "How can I find the cheapest flight using Skyscanner?",
+      answer: "Finding flights is easy here – over 100 million savvy travellers come to us each month to find cheap flight tickets, hotels and car hire. Here are a few simple tips on how to get the most out of your flight search. Save money and time. Whether it's the fastest flight or the smartest stay, you can pick your preferred flight provider or hotel based on real traveller ratings, and book instantly. Search Everywhere. Go anywhere. Fancy a trip but don’t mind where? Or perhaps you want to discover somewhere new. Search ‘Everywhere’ for the best budget airfare anywhere on any given day. Find the cheapest time to fly. If you have a destination in mind and want to find the cheapest flight, choose ‘Cheapest month’ when you search. Then find flights on the cheapest day."
     },
     {
-      question: "Can I plan flights and hotels together?",
-      answer: "Yes. The home search lets you switch between flights, hotels, and trip ideas before comparing results."
+      question: "Where should I book a flight to right now?",
+      answer: "If you're looking for inspiration for your next trip, search Everywhere to find a cheap flight ticket anywhere."
     },
     {
-      question: "Is this connected to live inventory?",
-      answer: "This sample can use the local API data, with graceful fallback options so the UI remains usable during setup."
+      question: "Do I book my flight with Skyscanner?",
+      answer: "We’re a search engine, so after you’ve found the best flight ticket you’ll book directly with the airline or travel provider on their site. This will give you the opportunity to add any loyalty information you would like and select your preferred flight options, such as seating."
+    },
+    {
+      question: "What happens after I have booked my flight?",
+      answer: "Your flight booking confirmation email and all the other info you'll need will come from the airline or provider you booked with. If you have any follow-up questions about your booking, or want to change or cancel your flight, you’d need to get in touch with them."
+    },
+    {
+      question: "Does Skyscanner do hotels too?",
+      answer: "Yes. You can use the same magic that powers flight search to find your perfect stay anywhere."
+    },
+    {
+      question: "What about car hire?",
+      answer: "You can also use Skyscanner to search for and compare cheap car hire in seconds, then pick up your wheels from the airport as soon as you touch down."
+    },
+    {
+      question: "What’s a Price Alert?",
+      answer: "If you set up a Price Alert, we’ll watch the price of plane tickets for you, and let you know via email or push notification via the app if they rise or fall."
     }
   ];
 
@@ -660,7 +781,6 @@ function HomePage({ locations, onSearch }) {
     <main>
       <section className="hero" id="search">
         <div className="hero-copy">
-          <p className="eyebrow">Flights, stays, and plans in one place</p>
           <h1>Travel planning that feels bright, quick, and protected.</h1>
           <p>
             Compare flexible fares, pair them with memorable stays, and keep your
@@ -677,7 +797,7 @@ function HomePage({ locations, onSearch }) {
             </a>
           </div>
         </div>
-        <SearchPanel locations={locations} onSearch={onSearch} />
+        <SearchPanel compact locations={locations} onSearch={onSearch} />
       </section>
 
       <section className="insight-strip" aria-label="Wayfinder highlights">
@@ -800,8 +920,8 @@ function SignedInHomePage({ locations, onSearch }) {
     return <HomePage locations={locations} onSearch={onSearch} />;
   }
 
-  const firstName = user?.given_name || user?.givenname || user?.givenName || user?.firstName || "";
-  const lastName = user?.family_name || user?.familyname || user?.familyName || user?.lastName || "";
+  const firstName = user?.name?.givenName || "";
+  const lastName = user?.name?.familyName || "";
   const fullName = `${firstName} ${lastName}`.trim();
   const email = user?.email || user?.mail || user?.username || user?.userName || "";
   const greetingName = firstName || fullName || email || "Traveler";
@@ -810,7 +930,6 @@ function SignedInHomePage({ locations, onSearch }) {
     <main className="dashboard-home">
       <section className="dashboard-hero">
         <div>
-          <p className="eyebrow">Travel workspace</p>
           <h1>Welcome back, {greetingName}.</h1>
           <p>
             Manage your searches, bookings, and trip plans from one focused workspace.
@@ -818,41 +937,42 @@ function SignedInHomePage({ locations, onSearch }) {
         </div>
       </section>
 
-      <section className="dashboard-grid" aria-label="Travel management overview">
-        <article className="dashboard-card dashboard-card--primary">
-          <span>Next step</span>
-          <h2>Start a new search</h2>
-          <p>Compare flights, hotels, and trip ideas with your signed-in session ready.</p>
-          <a className="dashboard-action" href="#dashboard-search">
-            Search options
-            <ArrowRight size={18} />
-          </a>
-        </article>
-        <article className="dashboard-card">
-          <span>Bookings</span>
-          <h2>Review saved trips</h2>
-          <p>Open your confirmed bookings and keep travel details close.</p>
-          <a className="dashboard-action dashboard-action--secondary" href="/bookings">
-            My Bookings
-            <ArrowRight size={18} />
-          </a>
-        </article>
-      </section>
-
       <section className="dashboard-search-section" id="dashboard-search">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Plan from here</p>
-            <h2>Search without leaving your workspace.</h2>
-          </div>
-        </div>
-        <SearchPanel locations={locations} onSearch={onSearch} />
+        <SearchPanel compact locations={locations} onSearch={onSearch} />
       </section>
     </main>
   );
 }
 
-function SiteFooter() {
+function FooterLinks({ authReady }) {
+  if (!authReady) {
+    return <PublicFooterLinks />;
+  }
+
+  return <LiveFooterLinks />;
+}
+
+function PublicFooterLinks() {
+  return (
+    <nav className="footer-links" aria-label="Footer navigation">
+      <a href="#search">Search</a>
+      <a href="#deals">Deals</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+  );
+}
+
+function LiveFooterLinks() {
+  const { isSignedIn } = useAsgardeo();
+
+  if (isSignedIn) {
+    return null;
+  }
+
+  return <PublicFooterLinks />;
+}
+
+function SiteFooter({ authReady }) {
   return (
     <footer className="site-footer">
       <div>
@@ -864,11 +984,7 @@ function SiteFooter() {
         </a>
         <p>Modern travel booking flows, secured with Asgardeo.</p>
       </div>
-      <nav className="footer-links" aria-label="Footer navigation">
-        <a href="#search">Search</a>
-        <a href="#deals">Deals</a>
-        <a href="#faq">FAQ</a>
-      </nav>
+      <FooterLinks authReady={authReady} />
     </footer>
   );
 }
@@ -877,8 +993,7 @@ function formatPrice(currency, amount) {
   return `${currency === "USD" ? "$" : `${currency} `}${amount}`;
 }
 
-const walletCredentialOffer =
-  "openid-credential-offer://?credential_offer_uri=https://stage.api.asgardeo.io/t/stageanu/oid4vci/credential-offer/72169f21-988b-4090-975e-44fa74a2fd7f";
+const walletCredentialOffer = import.meta.env.VITE_WALLET_CREDENTIAL_OFFER || "";
 
 function formatBookingReference(bookingId) {
   const source = String(bookingId || "").replace(/^booking-/i, "");
@@ -886,6 +1001,10 @@ function formatBookingReference(bookingId) {
   const numbers = source.replace(/\D/g, "").padEnd(6, "202600");
 
   return `${letters.slice(0, 4)}-${numbers.slice(0, 6)}`;
+}
+
+function getBookingReference(booking) {
+  return booking?.bookingReference || formatBookingReference(booking?.id);
 }
 
 function isSameFlight(firstFlight, secondFlight) {
@@ -898,7 +1017,7 @@ function isSameFlight(firstFlight, secondFlight) {
   );
 }
 
-function ResultsPage({ criteria, getAccessToken, locations, onSearch }) {
+function ResultsPage({ criteria, getAccessToken, locations, onNavigate, onSearch }) {
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -996,6 +1115,10 @@ function ResultsPage({ criteria, getAccessToken, locations, onSearch }) {
     }
   }
 
+  function handleFlightSelection(itemId) {
+    onNavigate(buildFlightDetailsPath(itemId, criteria));
+  }
+
   const title =
     criteria.category === "hotels"
       ? `Hotels in ${criteria.to || "your destination"}`
@@ -1040,6 +1163,7 @@ function ResultsPage({ criteria, getAccessToken, locations, onSearch }) {
               key={item.id}
               bookingState={bookingStates[item.id] || "idle"}
               onBook={handleBooking}
+              onSelectFlight={handleFlightSelection}
             />
           ))}
       </section>
@@ -1063,7 +1187,7 @@ function BookingButton({ bookingState, children, onClick }) {
   );
 }
 
-function ResultCard({ bookingState, category, item, onBook }) {
+function ResultCard({ bookingState, category, item, onBook, onSelectFlight }) {
   if (category === "hotels") {
     return (
       <article className="result-card">
@@ -1126,7 +1250,7 @@ function ResultCard({ bookingState, category, item, onBook }) {
       <div className="result-side">
         <strong>{formatPrice(item.currency, item.price)}</strong>
         <span>{item.cabin}</span>
-        <BookingButton bookingState={bookingState} onClick={() => onBook("flight", item.id)}>
+        <BookingButton bookingState={bookingState} onClick={() => onSelectFlight(item.id)}>
           Book flight
         </BookingButton>
       </div>
@@ -1138,6 +1262,318 @@ function ResultsPageWithAuth(props) {
   const { getAccessToken } = useAsgardeo();
 
   return <ResultsPage {...props} getAccessToken={getAccessToken} />;
+}
+
+function FlightDetailsPage({ criteria, flightId, onNavigate }) {
+  const [flight, setFlight] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function loadFlight() {
+      setIsLoading(true);
+      setError("");
+
+      try {
+        const data = await getFlight(flightId);
+
+        if (isCurrent) {
+          setFlight(data);
+        }
+      } catch (requestError) {
+        if (isCurrent) {
+          setError(requestError.message);
+        }
+      } finally {
+        if (isCurrent) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadFlight();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [flightId]);
+
+  return (
+    <main className="bookings-page">
+      <section className="management-header">
+        <div>
+          <a className="back-link" href={`/results${window.location.search}`}>
+            <ChevronLeft size={18} />
+            Back to results
+          </a>
+          <p className="eyebrow">Flight details</p>
+          <h1>{flight ? `${flight.from} to ${flight.to}` : "Flight details"}</h1>
+          <p>{flight ? `${flight.airline} · ${flight.dates}` : "Review your selected flight"}</p>
+        </div>
+      </section>
+
+      {error && (
+        <div className="api-status api-status--error" role="status">
+          {error}
+        </div>
+      )}
+
+      {isLoading && <p className="empty-state management-message">Loading flight details...</p>}
+
+      {!isLoading && flight && (
+        <section className="booking-detail-panel flight-review-panel" aria-label="Flight information">
+          <div className="flight-review-layout">
+            <div className="flight-review-main">
+              <div className="booking-itinerary-card">
+                <div className="booking-detail-topline">
+                  <span className="booking-status">Selected</span>
+                  <strong>{flight.airline}</strong>
+                </div>
+                <div className="itinerary-route">
+                  <div>
+                    <span>{flight.departureTime}</span>
+                    <strong>{flight.from}</strong>
+                  </div>
+                  <div className="itinerary-line">
+                    <Plane size={20} />
+                  </div>
+                  <div>
+                    <span>{flight.arrivalTime}</span>
+                    <strong>{flight.to}</strong>
+                  </div>
+                </div>
+                <div className="itinerary-meta">
+                  <span>{flight.duration}</span>
+                  <span>{flight.stops === 0 ? "Nonstop" : `${flight.stops} stop`}</span>
+                  <span>{flight.cabin}</span>
+                  <span>{criteria.travelers || "1 Adult, Economy"}</span>
+                </div>
+              </div>
+
+              <div className="booking-detail-sections flight-review-sections">
+                <section>
+                  <h2>Schedule</h2>
+                  <dl>
+                    <div>
+                      <dt>Travel dates</dt>
+                      <dd>{flight.dates}</dd>
+                    </div>
+                    <div>
+                      <dt>Duration</dt>
+                      <dd>{flight.duration}</dd>
+                    </div>
+                  </dl>
+                </section>
+                <section>
+                  <h2>Fare</h2>
+                  <dl>
+                    <div>
+                      <dt>Cabin</dt>
+                      <dd>{flight.cabin}</dd>
+                    </div>
+                    <div>
+                      <dt>Stops</dt>
+                      <dd>{flight.stops === 0 ? "Nonstop" : `${flight.stops} stop`}</dd>
+                    </div>
+                  </dl>
+                </section>
+              </div>
+            </div>
+
+            <aside className="booking-receipt-card flight-review-summary" aria-label="Flight price">
+              <div className="flight-review-summary-content">
+                <span>Total</span>
+                <strong>{formatPrice(flight.currency, flight.price)}</strong>
+                <p>Includes taxes and charges.</p>
+                <dl>
+                  <div>
+                    <dt>Airline</dt>
+                    <dd>{flight.airline}</dd>
+                  </div>
+                  <div>
+                    <dt>Travelers</dt>
+                    <dd>{criteria.travelers || "1 Adult, Economy"}</dd>
+                  </div>
+                </dl>
+              </div>
+              <button
+                className="wallet-button flight-review-confirm"
+                type="button"
+                onClick={() => onNavigate(buildFlightPaymentPath(flight.id, criteria))}
+              >
+                Confirm
+              </button>
+            </aside>
+          </div>
+        </section>
+      )}
+    </main>
+  );
+}
+
+function PaymentPageWithAuth({ criteria, flightId, onNavigate }) {
+  const { getAccessToken, isSignedIn, signIn, user } = useAsgardeo();
+  const [flight, setFlight] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [paymentState, setPaymentState] = useState("idle");
+  const [error, setError] = useState("");
+  const userKey = user?.sub || user?.username || user?.userName || user?.email || "signed-in";
+  const getAccessTokenRef = useRef(getAccessToken);
+
+  useEffect(() => {
+    getAccessTokenRef.current = getAccessToken;
+  }, [getAccessToken]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function loadFlight() {
+      setIsLoading(true);
+      setError("");
+
+      try {
+        const data = await getFlight(flightId);
+
+        if (isCurrent) {
+          setFlight(data);
+        }
+      } catch (requestError) {
+        if (isCurrent) {
+          setError(requestError.message);
+        }
+      } finally {
+        if (isCurrent) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadFlight();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [flightId, userKey]);
+
+  async function handlePayment() {
+    if (!flight) {
+      return;
+    }
+
+    setPaymentState("paying");
+    setError("");
+
+    try {
+      const accessToken = getAccessTokenRef.current ? await getAccessTokenRef.current() : null;
+      const booking = await createBooking({
+        type: "flight",
+        itemId: flight.id,
+        travelers: Number.parseInt(criteria.travelers, 10) || 1
+      }, accessToken);
+
+      onNavigate(`/bookings/${encodeURIComponent(booking.id)}`);
+    } catch (requestError) {
+      try {
+        if (requestError.message.includes("already exists")) {
+          const accessToken = getAccessTokenRef.current ? await getAccessTokenRef.current() : null;
+          const bookings = await getBookedFlights(accessToken);
+          const existingBooking = bookings.find((booking) => isSameFlight(flight, booking.flight));
+
+          if (existingBooking) {
+            onNavigate(`/bookings/${encodeURIComponent(existingBooking.id)}`);
+            return;
+          }
+        }
+      } catch {
+        // Keep the original payment error visible.
+      }
+
+      setPaymentState("idle");
+      setError(requestError.message);
+    }
+  }
+
+  if (!isSignedIn) {
+    return (
+      <main className="bookings-page">
+        <section className="management-empty">
+          <div>
+            <p className="eyebrow">Payment</p>
+            <h1>Sign in to complete payment.</h1>
+            <p>Your flight will be booked only after payment is completed.</p>
+          </div>
+          <button className="dashboard-action dashboard-action--secondary" type="button" onClick={() => signIn()}>
+            Sign in
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="bookings-page">
+      <section className="management-header">
+        <div>
+          <a className="back-link" href={buildFlightDetailsPath(flightId, criteria)}>
+            <ChevronLeft size={18} />
+            Back to flight
+          </a>
+          <p className="eyebrow">Payment</p>
+          <h1>Complete payment</h1>
+          <p>{flight ? `${flight.from} to ${flight.to} · ${flight.airline}` : "Preparing checkout"}</p>
+        </div>
+      </section>
+
+      {error && (
+        <div className="api-status api-status--error" role="status">
+          {error}
+        </div>
+      )}
+
+      {isLoading && <p className="empty-state management-message">Loading payment details...</p>}
+
+      {!isLoading && flight && (
+        <section className="payment-panel" aria-label="Payment details">
+          <div className="payment-form-card">
+            <div className="booking-detail-topline">
+              <span className="booking-status">Secure payment</span>
+              <CreditCard size={22} />
+            </div>
+            <label className="payment-field">
+              <span>Card number</span>
+              <input readOnly value="4242 4242 4242 4242" aria-label="Card number" />
+            </label>
+            <div className="payment-field-grid">
+              <label className="payment-field">
+                <span>Expiry</span>
+                <input readOnly value="12 / 30" aria-label="Expiry" />
+              </label>
+              <label className="payment-field">
+                <span>CVC</span>
+                <input readOnly value="123" aria-label="CVC" />
+              </label>
+            </div>
+            <button
+              className="search-button standalone-button"
+              type="button"
+              disabled={paymentState === "paying"}
+              onClick={handlePayment}
+            >
+              {paymentState === "paying" ? "Processing..." : "Pay and confirm booking"}
+            </button>
+          </div>
+
+          <aside className="booking-receipt-card" aria-label="Payment summary">
+            <span>Total due</span>
+            <strong>{formatPrice(flight.currency, flight.price)}</strong>
+            <p>{criteria.travelers || "1 Adult, Economy"} · {flight.dates}</p>
+          </aside>
+        </section>
+      )}
+    </main>
+  );
 }
 
 function BookingsPageWithAuth() {
@@ -1221,13 +1657,6 @@ function BookingsPageWithAuth() {
       )}
 
       <section className="management-panel" aria-label="Booked flights">
-        <div className="management-panel-header">
-          <div>
-            <h2>Flight bookings</h2>
-            <p>Track confirmed reservations and traveler details.</p>
-          </div>
-        </div>
-
         {isLoading && <p className="empty-state management-message">Loading booked flights...</p>}
         {!isLoading && bookings.length === 0 && (
           <div className="management-empty-state">
@@ -1242,6 +1671,7 @@ function BookingsPageWithAuth() {
           bookings.length > 0 && (
             <div className="booking-table-heading" aria-hidden="true">
               <span>Route</span>
+              <span>Reference</span>
               <span>Schedule</span>
               <span>Travelers</span>
               <span>Total</span>
@@ -1255,6 +1685,10 @@ function BookingsPageWithAuth() {
                 <span className="booking-status">{booking.status}</span>
                 <strong>{booking.flight.from} to {booking.flight.to}</strong>
                 <small>Booked {new Date(booking.createdAt).toLocaleDateString()}</small>
+              </div>
+              <div className="booking-cell">
+                <strong>{getBookingReference(booking)}</strong>
+                <span>Booking reference</span>
               </div>
               <div className="booking-cell">
                 <strong>{booking.flight.departureTime} - {booking.flight.arrivalTime}</strong>
@@ -1280,7 +1714,6 @@ function BookingDetailsPageWithAuth({ bookingId }) {
   const { getAccessToken, isSignedIn, signIn, user } = useAsgardeo();
   const [booking, setBooking] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isWalletQrOpen, setIsWalletQrOpen] = useState(false);
   const [error, setError] = useState("");
   const userKey = user?.sub || user?.username || user?.userName || user?.email || "signed-in";
   const getAccessTokenRef = useRef(getAccessToken);
@@ -1353,7 +1786,7 @@ function BookingDetailsPageWithAuth({ bookingId }) {
             Back to bookings
           </a>
           <h1>{booking ? `${booking.flight.from} to ${booking.flight.to}` : "Booking"}</h1>
-          <p>{booking ? `Reference ${formatBookingReference(booking.id)}` : "Loading booking information"}</p>
+          <p>{booking ? `Reference ${getBookingReference(booking)}` : "Loading booking information"}</p>
         </div>
       </section>
 
@@ -1366,9 +1799,9 @@ function BookingDetailsPageWithAuth({ bookingId }) {
       {isLoading && <p className="empty-state management-message">Loading booking details...</p>}
 
       {!isLoading && booking && (
-        <section className="booking-detail-panel" aria-label="Booking information">
-          <div className="booking-detail-main">
-            <div className="booking-itinerary-card">
+        <section className="booking-detail-panel booking-confirmed-panel" aria-label="Booking information">
+          <div className="booking-flight-widget">
+            <div className="booking-flight-main">
               <div className="booking-detail-topline">
                 <span className="booking-status">{booking.status}</span>
                 <strong>{booking.flight.airline}</strong>
@@ -1392,22 +1825,19 @@ function BookingDetailsPageWithAuth({ bookingId }) {
                 <span>{booking.flight.cabin}</span>
               </div>
             </div>
-
-            <aside className="booking-receipt-card" aria-label="Booking receipt">
-              <span>Total paid</span>
-              <strong>{formatPrice(booking.flight.currency, booking.flight.price)}</strong>
-              <p>Reference {formatBookingReference(booking.id)}</p>
-              <button
-                className="wallet-button"
-                type="button"
-                onClick={() => setIsWalletQrOpen(true)}
-              >
-                Add to wallet
-              </button>
+            <aside className="wallet-qr-panel" aria-label="Wallet QR code">
+              <span>Add to wallet</span>
+              <div className="wallet-qr-frame">
+                <img
+                  alt="QR code for adding this booking to a wallet"
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(walletCredentialOffer)}`}
+                />
+              </div>
+              <p>Scan with a compatible wallet app.</p>
             </aside>
           </div>
 
-          <div className="booking-detail-sections">
+          <div className="booking-detail-sections booking-confirmed-sections">
             <section>
               <h2>Trip details</h2>
               <dl>
@@ -1421,11 +1851,19 @@ function BookingDetailsPageWithAuth({ bookingId }) {
                     {booking.travelers} traveler{booking.travelers === 1 ? "" : "s"}
                   </dd>
                 </div>
+                <div>
+                  <dt>Duration</dt>
+                  <dd>{booking.flight.duration}</dd>
+                </div>
               </dl>
             </section>
             <section>
               <h2>Booking details</h2>
               <dl>
+                <div>
+                  <dt>Reference</dt>
+                  <dd>{getBookingReference(booking)}</dd>
+                </div>
                 <div>
                   <dt>Booked on</dt>
                   <dd>{new Date(booking.createdAt).toLocaleDateString()}</dd>
@@ -1436,59 +1874,36 @@ function BookingDetailsPageWithAuth({ bookingId }) {
                 </div>
               </dl>
             </section>
+            <section>
+              <h2>Payment</h2>
+              <dl>
+                <div>
+                  <dt>Total paid</dt>
+                  <dd>{formatPrice(booking.flight.currency, booking.flight.price)}</dd>
+                </div>
+                <div>
+                  <dt>Fare type</dt>
+                  <dd>{booking.flight.cabin}</dd>
+                </div>
+              </dl>
+            </section>
           </div>
-          {isWalletQrOpen && (
-            <div className="qr-overlay" role="presentation">
-              <div
-                className="qr-dialog"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="wallet-qr-title"
-              >
-                <div className="qr-dialog-header">
-                  <div>
-                    <p className="eyebrow">Digital wallet</p>
-                    <h2 id="wallet-qr-title">Add booking to wallet</h2>
-                    <p>
-                      Store this booking as a verifiable credential for a smoother airport journey.
-                    </p>
-                  </div>
-                  <button
-                    className="qr-close-button"
-                    type="button"
-                    aria-label="Close wallet QR code"
-                    onClick={() => setIsWalletQrOpen(false)}
-                  >
-                    x
-                  </button>
-                </div>
-                <div className="qr-code-frame">
-                  <img
-                    alt="QR code for adding this booking to a wallet"
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(walletCredentialOffer)}`}
-                  />
-                </div>
-                <div className="qr-benefits">
-                  <div>
-                    <strong>1</strong>
-                    <span>Scan with a compatible wallet app.</span>
-                  </div>
-                  <div>
-                    <strong>2</strong>
-                    <span>Save the booking credential to your wallet.</span>
-                  </div>
-                  <div>
-                    <strong>3</strong>
-                    <span>Present it to a verifier at boarding control.</span>
-                  </div>
-                </div>
-                <p className="qr-note">
-                  Airport staff can verify the credential cryptographically, helping reduce manual
-                  checks and supporting a seamless travel experience.
-                </p>
-              </div>
+
+          <section className="travel-insurance-section" aria-label="Travel insurance offer">
+            <div className="travel-insurance-icon" aria-hidden="true">
+              <ShieldCheck size={26} />
             </div>
-          )}
+            <div>
+              <span>Travel protection</span>
+              <h2>Add travel insurance before you fly.</h2>
+              <p>
+                Cover unexpected delays, medical emergencies, and baggage issues for this trip.
+              </p>
+            </div>
+            <button className="travel-insurance-button" type="button">
+              Buy insurance
+            </button>
+          </section>
         </section>
       )}
     </main>
@@ -1506,6 +1921,221 @@ function BookingsUnavailable() {
         </div>
       </section>
     </main>
+  );
+}
+
+function ChatWidget() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState("disconnected");
+  const [messages, setMessages] = useState([
+    createChatMessage("assistant", "Hi, I can help with travel questions and booking details.")
+  ]);
+  const [draft, setDraft] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const socketRef = useRef(null);
+  const reconnectTimerRef = useRef(null);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsProcessing(false);
+      setConnectionStatus("disconnected");
+      return undefined;
+    }
+
+    let isMounted = true;
+
+    function connect() {
+      setConnectionStatus("connecting");
+
+      const socket = new WebSocket(AGENT_CHAT_URL);
+      socketRef.current = socket;
+
+      socket.addEventListener("open", () => {
+        if (isMounted) {
+          setConnectionStatus("connected");
+        }
+      });
+
+      socket.addEventListener("message", (event) => {
+        let payload;
+
+        try {
+          payload = JSON.parse(event.data);
+        } catch {
+          payload = {
+            type: "response",
+            message: event.data
+          };
+        }
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (payload.type === "ready") {
+          setConnectionStatus("connected");
+          return;
+        }
+
+        if (payload.type === "processing") {
+          setIsProcessing(true);
+          return;
+        }
+
+        if (payload.type === "response") {
+          setIsProcessing(false);
+          setMessages((current) => [
+            ...current,
+            createChatMessage("assistant", payload.message || "I finished, but did not receive a response.")
+          ]);
+          return;
+        }
+
+        if (payload.type === "error") {
+          setIsProcessing(false);
+          setMessages((current) => [
+            ...current,
+            createChatMessage("error", payload.message || "The AI agent could not process that message.")
+          ]);
+        }
+      });
+
+      socket.addEventListener("close", () => {
+        if (!isMounted) {
+          return;
+        }
+
+        setIsProcessing(false);
+        setConnectionStatus("disconnected");
+        reconnectTimerRef.current = window.setTimeout(connect, 2500);
+      });
+
+      socket.addEventListener("error", () => {
+        if (isMounted) {
+          setConnectionStatus("disconnected");
+        }
+      });
+    }
+
+    connect();
+
+    return () => {
+      isMounted = false;
+      window.clearTimeout(reconnectTimerRef.current);
+      socketRef.current?.close();
+      socketRef.current = null;
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      messagesEndRef.current?.scrollIntoView({ block: "end" });
+    }
+  }, [isOpen, messages, isProcessing]);
+
+  function handleSubmit(event) {
+    event.preventDefault();
+
+    const message = draft.trim();
+
+    if (!message) {
+      return;
+    }
+
+    setDraft("");
+    setMessages((current) => [...current, createChatMessage("user", message)]);
+
+    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+      setMessages((current) => [
+        ...current,
+        createChatMessage("error", "AI agent is not connected. Make sure it is running at ws://localhost:8790/chat.")
+      ]);
+      return;
+    }
+
+    setIsProcessing(true);
+    socketRef.current.send(JSON.stringify({ message }));
+  }
+
+  const isConnected = connectionStatus === "connected";
+  const statusText =
+    connectionStatus === "connected"
+      ? "Connected"
+      : connectionStatus === "connecting"
+        ? "Connecting"
+        : "Disconnected";
+
+  return (
+    <div className="chat-widget">
+      {isOpen && (
+        <section className="chat-panel" aria-label="AI travel assistant">
+          <header className="chat-header">
+            <div>
+              <span className="chat-kicker">AI assistant</span>
+              <h2>Travel support</h2>
+            </div>
+            <div className="chat-header-actions">
+              <span className={`chat-status chat-status--${connectionStatus}`}>
+                {statusText}
+              </span>
+              <button
+                className="chat-icon-button"
+                type="button"
+                aria-label="Close chat"
+                onClick={() => setIsOpen(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </header>
+
+          <div className="chat-messages" role="log" aria-live="polite">
+            {messages.map((message) => (
+              <div className={`chat-message chat-message--${message.role}`} key={message.id}>
+                {message.content}
+              </div>
+            ))}
+            {isProcessing && (
+              <div className="chat-message chat-message--assistant chat-message--typing">
+                Thinking...
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          <form className="chat-composer" onSubmit={handleSubmit}>
+            <label className="chat-input-label">
+              <span>Message</span>
+              <input
+                value={draft}
+                placeholder={isConnected ? "Ask the AI agent..." : "Waiting for AI agent..."}
+                aria-label="Message the AI agent"
+                onChange={(event) => setDraft(event.target.value)}
+              />
+            </label>
+            <button
+              className="chat-send-button"
+              type="submit"
+              disabled={!draft.trim() || isProcessing}
+              aria-label="Send message"
+            >
+              <Send size={18} />
+            </button>
+          </form>
+        </section>
+      )}
+
+      <button
+        className="chat-launcher"
+        type="button"
+        aria-label={isOpen ? "Close AI chat" : "Open AI chat"}
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((current) => !current)}
+      >
+        {isOpen ? <X size={22} /> : <MessageCircle size={24} />}
+      </button>
+    </div>
   );
 }
 
@@ -1586,7 +2216,17 @@ function App({ authReady }) {
     setLocation(getCurrentLocation());
   }
 
+  function handleNavigate(nextPath) {
+    window.history.pushState({}, "", nextPath);
+    setLocation(getCurrentLocation());
+  }
+
   const isResultsPage = location.pathname === "/results";
+  const pathSegments = location.pathname.split("/").filter(Boolean);
+  const isFlightDetailsPage = pathSegments[0] === "flights" && pathSegments[1] && pathSegments.length === 2;
+  const flightId = isFlightDetailsPage ? decodeURIComponent(pathSegments[1]) : "";
+  const isPaymentPage = pathSegments[0] === "payment" && pathSegments[1] === "flight" && pathSegments[2];
+  const paymentFlightId = isPaymentPage ? decodeURIComponent(pathSegments[2]) : "";
   const isBookingsPage = location.pathname === "/bookings";
   const isBookingDetailsPage = location.pathname.startsWith("/bookings/");
   const bookingId = isBookingDetailsPage ? decodeURIComponent(location.pathname.split("/").pop() || "") : "";
@@ -1601,11 +2241,7 @@ function App({ authReady }) {
           </span>
           <span>Wayfinder</span>
         </a>
-        <nav className="header-nav" aria-label="Primary navigation">
-          <a href="/#search">Search</a>
-          <a href="/#deals">Deals</a>
-          <a href="/#faq">FAQ</a>
-        </nav>
+        <PrimaryNav authReady={authReady} />
         <AuthenticatedHeader authReady={authReady} />
       </header>
 
@@ -1619,9 +2255,31 @@ function App({ authReady }) {
 
       {isResultsPage ? (
         authReady ? (
-          <ResultsPageWithAuth criteria={criteria} locations={locations} onSearch={handleSearch} />
+          <ResultsPageWithAuth
+            criteria={criteria}
+            locations={locations}
+            onNavigate={handleNavigate}
+            onSearch={handleSearch}
+          />
         ) : (
-          <ResultsPage criteria={criteria} locations={locations} onSearch={handleSearch} />
+          <ResultsPage
+            criteria={criteria}
+            locations={locations}
+            onNavigate={handleNavigate}
+            onSearch={handleSearch}
+          />
+        )
+      ) : isFlightDetailsPage ? (
+        <FlightDetailsPage criteria={criteria} flightId={flightId} onNavigate={handleNavigate} />
+      ) : isPaymentPage ? (
+        authReady ? (
+          <PaymentPageWithAuth
+            criteria={criteria}
+            flightId={paymentFlightId}
+            onNavigate={handleNavigate}
+          />
+        ) : (
+          <BookingsUnavailable />
         )
       ) : isBookingDetailsPage ? (
         authReady ? <BookingDetailsPageWithAuth bookingId={bookingId} /> : <BookingsUnavailable />
@@ -1634,7 +2292,8 @@ function App({ authReady }) {
           <HomePage locations={locations} onSearch={handleSearch} />
         )
       )}
-      <SiteFooter />
+      <ChatWidget />
+      <SiteFooter authReady={authReady} />
     </div>
   );
 }

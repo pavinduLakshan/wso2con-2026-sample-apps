@@ -6,6 +6,7 @@ import { resolveUser } from "./auth.js";
 import {
   createBookingRecord,
   findDuplicateBooking,
+  findFlightById,
   findFlights,
   findHotels,
   listBookedFlights,
@@ -55,6 +56,10 @@ function searchHotels(params) {
   });
 }
 
+function generateBookingReference() {
+  return `WF-${randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+}
+
 async function handleBooking(request) {
   const user = await resolveUser(request);
   const body = await readJsonBody(request);
@@ -92,6 +97,7 @@ async function handleBooking(request) {
 
   const booking = createBookingRecord({
     id: `booking-${randomUUID()}`,
+    bookingReference: generateBookingReference(),
     user,
     type: itemType,
     itemId,
@@ -121,6 +127,19 @@ async function route(request, response) {
     if (request.method === "GET" && url.pathname === "/api/flights") {
       return sendJson(response, 200, {
         data: searchFlights(url.searchParams)
+      });
+    }
+
+    if (request.method === "GET" && url.pathname.startsWith("/api/flights/")) {
+      const flightId = decodeURIComponent(url.pathname.replace("/api/flights/", ""));
+      const flight = findFlightById(flightId);
+
+      if (!flight) {
+        return sendJson(response, 404, { error: "Flight not found" });
+      }
+
+      return sendJson(response, 200, {
+        data: flight
       });
     }
 

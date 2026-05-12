@@ -64,6 +64,135 @@ type WebSocketFrame = {
 };
 
 const WEB_SOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+const JSON_SCHEMA_TYPE_VALUES = new Set(["string", "number", "integer", "boolean", "array", "object"]);
+
+type JsonSchemaObject = {
+    [key: string]: unknown;
+};
+
+type ToolWithSchema = {
+    schema?: unknown;
+};
+
+function isJsonSchemaObject(value: unknown): value is JsonSchemaObject {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getGeminiSchemaType(schema: JsonSchemaObject): string | undefined {
+    const type = schema.type;
+
+    if (typeof type === "string" && JSON_SCHEMA_TYPE_VALUES.has(type)) {
+        return type;
+    }
+
+    if (Array.isArray(type)) {
+        const nullable = type.includes("null");
+        const schemaType = type.find((candidate): candidate is string => (
+            typeof candidate === "string" &&
+            candidate !== "null" &&
+            JSON_SCHEMA_TYPE_VALUES.has(candidate)
+        ));
+
+        if (schemaType) {
+            if (nullable && schema.nullable === undefined) {
+                schema.nullable = true;
+            }
+
+            return schemaType;
+        }
+    }
+
+    if (isJsonSchemaObject(schema.properties)) {
+        return "object";
+    }
+
+    if (isJsonSchemaObject(schema.items)) {
+        return "array";
+    }
+
+    if (Array.isArray(schema.enum)) {
+        return "string";
+    }
+
+    return undefined;
+}
+
+function sanitizeGeminiSchema(schema: unknown): unknown {
+    if (!isJsonSchemaObject(schema)) {
+        return schema;
+    }
+
+    const type = getGeminiSchemaType(schema);
+    const sanitized: JsonSchemaObject = {};
+
+    if (type) {
+        sanitized.type = type;
+    }
+
+    if (typeof schema.description === "string") {
+        sanitized.description = schema.description;
+    }
+
+    if (typeof schema.nullable === "boolean") {
+        sanitized.nullable = schema.nullable;
+    }
+
+    if (type === "string" && typeof schema.format === "string") {
+        sanitized.format = schema.format;
+    }
+
+    if (type === "string" && Array.isArray(schema.enum)) {
+        sanitized.enum = schema.enum.filter((value): value is string => typeof value === "string");
+        sanitized.format = "enum";
+    }
+
+    if ((type === "number" || type === "integer") && typeof schema.format === "string") {
+        sanitized.format = schema.format;
+    }
+
+    if (type === "array") {
+        sanitized.items = sanitizeGeminiSchema(schema.items);
+
+        if (typeof schema.minItems === "number") {
+            sanitized.minItems = schema.minItems;
+        }
+
+        if (typeof schema.maxItems === "number") {
+            sanitized.maxItems = schema.maxItems;
+        }
+    }
+
+    if (type === "object") {
+        const properties: JsonSchemaObject = {};
+
+        if (isJsonSchemaObject(schema.properties)) {
+            for (const [propertyName, propertySchema] of Object.entries(schema.properties)) {
+                properties[propertyName] = sanitizeGeminiSchema(propertySchema);
+            }
+        }
+
+        sanitized.properties = properties;
+
+        if (Array.isArray(schema.required)) {
+            sanitized.required = schema.required.filter((propertyName): propertyName is string => (
+                typeof propertyName === "string" &&
+                Object.hasOwn(properties, propertyName)
+            ));
+        }
+    }
+
+    return sanitized;
+}
+
+function sanitizeToolSchemasForGemini<T extends ToolWithSchema>(tools: T[]): T[] {
+    return tools.map((tool) => {
+        if (tool.schema) {
+            tool.schema = sanitizeGeminiSchema(tool.schema);
+        }
+
+        return tool;
+    });
+}
 
 function parseChatRequest(payload: string): ChatMessage[] {
 
@@ -203,15 +332,37 @@ function parseWebSocketFrame(
     };
 }
 
-function sendJson(socket: Duplex, payload: Record<string, unknown>) {
-    if (!socket.destroyed) {
-        socket.write(encodeWebSocketFrame(JSON.stringify(payload)));
+function isSocketWritable(socket: Duplex) {
+    return !socket.destroyed && !socket.writableEnded;
+}
+
+function writeFrame(socket: Duplex, frame: Buffer) {
+    if (!isSocketWritable(socket)) {
+        return false;
+    }
+
+    try {
+        socket.write(frame);
+
+        return true;
+    } catch (error) {
+        console.warn("Unable to write WebSocket frame:", error instanceof Error ? error.message : error);
+
+        return false;
     }
 }
 
+function sendJson(socket: Duplex, payload: Record<string, unknown>) {
+    return writeFrame(socket, encodeWebSocketFrame(JSON.stringify(payload)));
+}
+
 function closeWebSocket(socket: Duplex) {
-    if (!socket.destroyed) {
-        socket.end(encodeWebSocketFrame("", 0x8));
+    if (isSocketWritable(socket)) {
+        try {
+            socket.end(encodeWebSocketFrame("", 0x8));
+        } catch {
+            socket.destroy();
+        }
     }
 }
 
@@ -234,7 +385,7 @@ async function createAgent() {
         },
     });
 
-    const tools = await client.getTools();
+    const tools = sanitizeToolSchemasForGemini(await client.getTools());
 
     const agent = createReactAgent({
         llm: model,
@@ -262,6 +413,21 @@ async function runAgentServer() {
     });
 
     const handleConnection = (socket: Duplex) => {
+        let isClosed = false;
+
+        socket.on("close", () => {
+            isClosed = true;
+        });
+
+        socket.on("end", () => {
+            isClosed = true;
+        });
+
+        socket.on("error", (error) => {
+            isClosed = true;
+            console.warn("WebSocket client disconnected:", error.message);
+        });
+
         sendJson(socket, {
             type: "ready",
             message: "Connected to the Asgardeo AI agent.",
@@ -286,25 +452,40 @@ async function runAgentServer() {
                     }
 
                     if (parsed.frame.opcode === 0x9) {
-                        socket.write(encodeWebSocketFrame(parsed.frame.payload.toString(), 0xA));
+                        writeFrame(socket, encodeWebSocketFrame(parsed.frame.payload.toString(), 0xA));
                     }
 
                     if (parsed.frame.opcode === 0x1) {
                         const payload = parsed.frame.payload.toString("utf8");
 
                         queue = queue.then(async () => {
+                            if (isClosed) {
+                                return;
+                            }
+
                             const messages = parseChatRequest(payload);
 
-                            sendJson(socket, { type: "processing" });
+                            if (!sendJson(socket, { type: "processing" })) {
+                                isClosed = true;
+                                return;
+                            }
 
                             const result = await agent.invoke({ messages });
                             const finalResponse = result.messages[result.messages.length - 1];
+
+                            if (isClosed) {
+                                return;
+                            }
 
                             sendJson(socket, {
                                 type: "response",
                                 message: getResponseContent(finalResponse.content),
                             });
                         }).catch((error: unknown) => {
+                            if (isClosed) {
+                                return;
+                            }
+
                             console.error("Error handling chat message:", error);
                             sendJson(socket, {
                                 type: "error",
@@ -327,25 +508,31 @@ async function runAgentServer() {
     };
 
     server.on("upgrade", (request, socket, head) => {
+        socket.on("error", (error) => {
+            console.warn("WebSocket upgrade socket error:", error.message);
+        });
+
         try {
             const url = new URL(request.url || "", `http://${request.headers.host || host}`);
             const key = request.headers["sec-websocket-key"];
 
             if (url.pathname !== "/chat" || typeof key !== "string") {
-                socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
+                if (!socket.destroyed && !socket.writableEnded) {
+                    socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
+                }
                 socket.destroy();
 
                 return;
             }
 
-            socket.write([
+            writeFrame(socket, Buffer.from([
                 "HTTP/1.1 101 Switching Protocols",
                 "Upgrade: websocket",
                 "Connection: Upgrade",
                 `Sec-WebSocket-Accept: ${createWebSocketAcceptKey(key)}`,
                 "",
                 "",
-            ].join("\r\n"));
+            ].join("\r\n")));
 
             if (head.length > 0) {
                 socket.unshift(head);

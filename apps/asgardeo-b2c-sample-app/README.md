@@ -137,6 +137,7 @@ Configure the frontend environment using the values from your Asgardeo applicati
 
 ```bash
 VITE_ASGARDEO_CLIENT_ID=your-asgardeo-application-client-id
+VITE_ASGARDEO_ORG_NAME=your-organization-name
 VITE_ASGARDEO_BASE_URL=https://api.asgardeo.io/t/your-organization-name
 ```
 

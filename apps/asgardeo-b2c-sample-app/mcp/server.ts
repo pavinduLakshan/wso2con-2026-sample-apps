@@ -158,12 +158,12 @@ function createTravelMcpServer(authorization?: string) {
         {
             type: z.enum(["flight", "hotel"]).describe("Booking type."),
             itemId: z.string().describe("Flight or hotel item ID to book."),
-            travelers: z.number().int().positive().default(1).describe("Number of travelers."),
+            travelers: z.number().int().optional().describe("Number of travelers."),
         },
         async ({ type, itemId, travelers }) => toToolContent(await api.post("/api/bookings", {
             type,
             itemId,
-            travelers,
+            travelers: travelers ?? 1,
         })),
     );
 

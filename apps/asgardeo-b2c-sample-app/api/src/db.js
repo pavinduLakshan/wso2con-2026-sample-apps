@@ -13,6 +13,7 @@ function ensureSchema(database) {
   database.exec(`
     CREATE TABLE IF NOT EXISTS bookings (
       id TEXT PRIMARY KEY,
+      booking_reference TEXT NOT NULL,
       user_id TEXT NOT NULL,
       username TEXT NOT NULL,
       type TEXT NOT NULL,
@@ -22,6 +23,31 @@ function ensureSchema(database) {
       created_at TEXT NOT NULL
     );
   `);
+
+  const bookingColumns = database.prepare("PRAGMA table_info(bookings)").all();
+  const hasBookingReference = bookingColumns.some((column) => column.name === "booking_reference");
+
+  if (!hasBookingReference) {
+    database.exec("ALTER TABLE bookings ADD COLUMN booking_reference TEXT;");
+  }
+
+  const bookingsWithoutReference = database
+    .prepare("SELECT id FROM bookings WHERE booking_reference IS NULL OR booking_reference = ''")
+    .all();
+
+  const updateBookingReference = database.prepare(
+    "UPDATE bookings SET booking_reference = @bookingReference WHERE id = @id"
+  );
+
+  for (const booking of bookingsWithoutReference) {
+    const source = String(booking.id || "").replace(/^booking-/i, "").replace(/[^a-z0-9]/gi, "");
+    const bookingReference = `WF-${source.toUpperCase().padEnd(8, "0").slice(0, 8)}`;
+
+    updateBookingReference.run({
+      id: booking.id,
+      bookingReference
+    });
+  }
 }
 
 function getDatabase() {
@@ -115,6 +141,14 @@ export function findFlights({ from, to, cabin }) {
   return rows.map(mapFlight);
 }
 
+export function findFlightById(id) {
+  const row = getDatabase()
+    .prepare("SELECT * FROM flights WHERE id = @id")
+    .get({ id });
+
+  return row ? mapFlight(row) : null;
+}
+
 export function findHotels({ location, maxNightlyRate }) {
   const conditions = [];
   const params = {};
@@ -180,7 +214,16 @@ export function listLocations({ category } = {}) {
   return rows;
 }
 
-export function createBookingRecord({ id, user, type, itemId, travelers, status, createdAt }) {
+export function createBookingRecord({
+  id,
+  bookingReference,
+  user,
+  type,
+  itemId,
+  travelers,
+  status,
+  createdAt
+}) {
   const username = user.username || user.email || user.id;
 
   getDatabase()
@@ -188,6 +231,7 @@ export function createBookingRecord({ id, user, type, itemId, travelers, status,
       `
         INSERT INTO bookings (
           id,
+          booking_reference,
           user_id,
           username,
           type,
@@ -197,6 +241,7 @@ export function createBookingRecord({ id, user, type, itemId, travelers, status,
           created_at
         ) VALUES (
           @id,
+          @bookingReference,
           @userId,
           @username,
           @type,
@@ -209,6 +254,7 @@ export function createBookingRecord({ id, user, type, itemId, travelers, status,
     )
     .run({
       id,
+      bookingReference,
       userId: user.id,
       username,
       type,
@@ -220,6 +266,7 @@ export function createBookingRecord({ id, user, type, itemId, travelers, status,
 
   return {
     id,
+    bookingReference,
     userId: user.id,
     username,
     type,
@@ -272,6 +319,7 @@ export function listBookedFlights(username) {
       `
         SELECT
           bookings.id AS booking_id,
+          bookings.booking_reference,
           bookings.username,
           bookings.travelers,
           bookings.status,
@@ -288,6 +336,7 @@ export function listBookedFlights(username) {
 
   return rows.map((row) => ({
     id: row.booking_id,
+    bookingReference: row.booking_reference,
     username: row.username,
     travelers: row.travelers,
     status: row.status,

@@ -33,6 +33,12 @@ export async function getFlights(searchParams = {}) {
   return response.data;
 }
 
+export async function getFlight(flightId) {
+  const response = await requestJson(`/api/flights/${encodeURIComponent(flightId)}`);
+
+  return response.data;
+}
+
 export async function getHotels(searchParams = {}) {
   const params = new URLSearchParams();
 

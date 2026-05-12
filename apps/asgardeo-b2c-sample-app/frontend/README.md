@@ -32,11 +32,14 @@ Update the values:
 
 ```bash
 VITE_ASGARDEO_CLIENT_ID=your-asgardeo-application-client-id
+VITE_ASGARDEO_ORG_NAME=your-organization-name
 VITE_ASGARDEO_BASE_URL=https://api.asgardeo.io/t/your-organization-name
 VITE_API_BASE_URL=http://localhost:8787
 ```
 
 `VITE_ASGARDEO_CLIENT_ID` is the client ID of your Asgardeo application.
+
+`VITE_ASGARDEO_ORG_NAME` is used to build the sign-up URL. If omitted, the app derives it from `VITE_ASGARDEO_BASE_URL`.
 
 `VITE_ASGARDEO_BASE_URL` is your Asgardeo organization base URL.
 
