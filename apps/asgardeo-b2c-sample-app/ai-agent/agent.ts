@@ -376,7 +376,7 @@ async function createAgent() {
     const agentToken = await asgardeoJavaScriptClient.getAgentToken(agentConfig);
 
     const client = new MultiServerMCPClient({
-        math: {
+        travel: {
             transport: "http",
             url: process.env.MCP_SERVER_URL || "http://localhost:8000/mcp",
             headers: {
