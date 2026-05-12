@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAsgardeo } from "@asgardeo/react";
+import { Heart } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { SearchPanel } from "../components/SearchPanel";
 import {
@@ -9,8 +10,27 @@ import {
   getHotels,
   getTrips
 } from "../api";
+import { ASGARDEO_CLIENT_ID, getCDSProfile, updateCDSProfile } from "../cds-api";
 import { formatPrice, isSameFlight } from "../utils/bookings";
 import { buildFlightDetailsPath } from "../utils/routes";
+
+function extractFavoriteFlightIds(profile) {
+  const normalizedProfile = profile?.data || profile?.profile || profile || {};
+  const applicationData = normalizedProfile?.application_data || normalizedProfile?.applicationData || {};
+  const appScopedFavorites = applicationData?.[ASGARDEO_CLIENT_ID]?.flight_no;
+
+  if (Array.isArray(appScopedFavorites)) {
+    return appScopedFavorites.map((id) => `${id}`);
+  }
+
+  for (const appData of Object.values(applicationData)) {
+    if (Array.isArray(appData?.flight_no)) {
+      return appData.flight_no.map((id) => `${id}`);
+    }
+  }
+
+  return [];
+}
 
 function BookingButton({ bookingState, children, onClick }) {
   const isBooking = bookingState === "booking";
@@ -28,7 +48,7 @@ function BookingButton({ bookingState, children, onClick }) {
   );
 }
 
-function ResultCard({ bookingState, category, item, onBook, onSelectFlight }) {
+function ResultCard({ bookingState, category, isFavorite, item, onBook, onSelectFlight, onToggleFavorite }) {
   if (category === "hotels") {
     return (
       <article className="result-card">
@@ -89,6 +109,14 @@ function ResultCard({ bookingState, category, item, onBook, onSelectFlight }) {
         </div>
       </div>
       <div className="result-side">
+        <button
+          className={`favorite-button ${isFavorite ? "favorite-button--active" : ""}`}
+          type="button"
+          aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+          onClick={() => onToggleFavorite(item.id, item)}
+        >
+          <Heart size={20} />
+        </button>
         <strong>{formatPrice(item.currency, item.price)}</strong>
         <span>{item.cabin}</span>
         <BookingButton bookingState={bookingState} onClick={() => onSelectFlight(item.id)}>
@@ -99,12 +127,46 @@ function ResultCard({ bookingState, category, item, onBook, onSelectFlight }) {
   );
 }
 
-export function ResultsPage({ criteria, getAccessToken, locations, onSearch }) {
+export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations, onSearch }) {
   const navigate = useNavigate();
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [bookingStates, setBookingStates] = useState({});
+  const [favorites, setFavorites] = useState(() => new Set());
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function loadFavoritesFromCDS() {
+      if (!cdsProfileId || criteria.category !== "flights") {
+        if (isCurrent) {
+          setFavorites(new Set());
+        }
+        return;
+      }
+
+      try {
+        const profile = await getCDSProfile(cdsProfileId);
+        const favoriteIds = extractFavoriteFlightIds(profile);
+
+        if (isCurrent) {
+          setFavorites(new Set(favoriteIds.map((id) => `${id}`)));
+        }
+      } catch (loadError) {
+        if (isCurrent) {
+          setFavorites(new Set());
+        }
+        console.warn("Failed to load CDS favorites:", loadError.message);
+      }
+    }
+
+    loadFavoritesFromCDS();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [cdsProfileId, criteria.category]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -198,6 +260,39 @@ export function ResultsPage({ criteria, getAccessToken, locations, onSearch }) {
     }
   }
 
+  async function toggleFavorite(itemId, flight) {
+    const newFavorites = new Set(favorites);
+
+    if (newFavorites.has(itemId)) {
+      newFavorites.delete(itemId);
+    } else {
+      newFavorites.add(itemId);
+    }
+
+    setFavorites(newFavorites);
+
+    if (cdsProfileId && criteria.category === "flights" && flight) {
+      try {
+        const favoritedFlights = Array.from(newFavorites)
+          .map((id) => {
+            const result = results.find((r) => r.id === id);
+            return result ? `${result.id}` : null;
+          })
+          .filter(Boolean);
+
+        await updateCDSProfile(cdsProfileId, {
+          application_data: {
+            [ASGARDEO_CLIENT_ID]: {
+              flight_no: favoritedFlights
+            }
+          }
+        });
+      } catch (updateError) {
+        console.warn("Failed to update CDS profile:", updateError.message);
+      }
+    }
+  }
+
   function handleFlightSelection(itemId) {
     navigate(buildFlightDetailsPath(itemId, criteria));
   }
@@ -245,8 +340,10 @@ export function ResultsPage({ criteria, getAccessToken, locations, onSearch }) {
               item={item}
               key={item.id}
               bookingState={bookingStates[item.id] || "idle"}
+              isFavorite={favorites.has(item.id)}
               onBook={handleBooking}
               onSelectFlight={handleFlightSelection}
+              onToggleFavorite={toggleFavorite}
             />
           ))}
       </section>
