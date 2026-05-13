@@ -1,7 +1,9 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { useState } from "react";
 import { useAsgardeo } from "@asgardeo/nextjs";
+import LoadingScreen, { LoadingStep } from "../LoadingScreen";
+import PlanSelection from "./PlanSelection";
 
 type OnboardingResponse = {
   organization: {
@@ -20,41 +22,95 @@ type FormState = {
   familyName: string;
   givenName: string;
   organizationName: string;
+  password: string;
 };
 
+type FormErrors = Partial<Record<keyof FormState, string>>;
+
 const ONBOARDING_ERROR_MESSAGE = "We couldn't create your organization right now. Please try again in a moment.";
+
+const FIELD_LABELS: Record<keyof FormState, string> = {
+  email: "Work email",
+  familyName: "Last name",
+  givenName: "First name",
+  organizationName: "Organization name",
+  password: "Password"
+};
 
 const initialForm: FormState = {
   email: "",
   familyName: "",
   givenName: "",
-  organizationName: ""
+  organizationName: "",
+  password: ""
 };
+
+function validate(form: FormState): FormErrors {
+  const errors: FormErrors = {};
+
+  for (const key of Object.keys(form) as (keyof FormState)[]) {
+    if (!form[key].trim()) {
+      errors[key] = `${FIELD_LABELS[key]} is required.`;
+    }
+  }
+
+  return errors;
+}
+
+const INITIAL_STEPS: LoadingStep[] = [
+  { label: "Provisioning your organization", status: "pending" },
+  { label: "Creating your user account", status: "pending" },
+  { label: "Switching to your workspace", status: "pending" },
+];
+
+type Phase = "form" | "plan" | "submitting";
 
 export default function OnboardingForm() {
   const { isSignedIn, signIn, switchOrganization } = useAsgardeo();
   const [form, setForm] = useState<FormState>(initialForm);
-  const [error, setError] = useState("");
-  const [status, setStatus] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [submitError, setSubmitError] = useState("");
+  const [phase, setPhase] = useState<Phase>("form");
+  const [steps, setSteps] = useState<LoadingStep[]>(INITIAL_STEPS);
+  const [showPassword, setShowPassword] = useState(false);
+
+  function setStepStatus(index: number, status: LoadingStep["status"]) {
+    setSteps((current) =>
+      current.map((step, i) => (i === index ? { ...step, status } : step))
+    );
+  }
 
   function updateField(field: keyof FormState, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
+    if (errors[field]) {
+      setErrors((current) => ({ ...current, [field]: undefined }));
+    }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: { preventDefault(): void }) {
     event.preventDefault();
-    setError("");
-    setStatus("Creating your organization workspace...");
-    setIsSubmitting(true);
+
+    const validationErrors = validate(form);
+    setErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length > 0) {
+      return;
+    }
+
+    setPhase("plan");
+  }
+
+  async function handlePlanSelect() {
+    setSubmitError("");
+    setSteps(INITIAL_STEPS);
+    setPhase("submitting");
 
     try {
+      setStepStatus(0, "active");
       const response = await fetch("/api/onboarding", {
         body: JSON.stringify(form),
-        headers: {
-          "Content-Type": "application/json"
-        },
-        method: "POST"
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
       });
       const body = await response.json().catch(() => ({}));
 
@@ -62,76 +118,122 @@ export default function OnboardingForm() {
         throw new Error(ONBOARDING_ERROR_MESSAGE);
       }
 
+      setStepStatus(0, "done");
+      setStepStatus(1, "active");
+
       const result = body as OnboardingResponse;
-      setStatus("Organization and user are ready. Switching workspace...");
+
+      setStepStatus(1, "done");
+      setStepStatus(2, "active");
 
       if (isSignedIn && switchOrganization) {
         await switchOrganization(result.organization);
+        setStepStatus(2, "done");
+        await new Promise((resolve) => setTimeout(resolve, 1200));
         window.location.assign("/dashboard");
-
         return;
       }
 
-      if (typeof signIn !== "function") {
-        throw new Error(ONBOARDING_ERROR_MESSAGE);
-      }
-
-      setStatus("Organization and user are ready. Redirecting to your workspace...");
-      await signIn();
+      setStepStatus(2, "done");
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      await signIn?.();
     } catch {
-      setError(ONBOARDING_ERROR_MESSAGE);
-      setStatus("");
-    } finally {
-      setIsSubmitting(false);
+      setSubmitError(ONBOARDING_ERROR_MESSAGE);
+      await new Promise((resolve) => setTimeout(resolve, 2200));
+      setPhase("form");
     }
+  }
+
+  if (phase === "plan") {
+    return <PlanSelection onBack={() => setPhase("form")} onSelect={handlePlanSelect} />;
+  }
+
+  if (phase === "submitting") {
+    return (
+      <LoadingScreen
+        description="This usually takes just a few seconds."
+        error={submitError || undefined}
+        steps={steps}
+        title="Setting up your workspace…"
+      />
+    );
   }
 
   return (
     <form className="onboarding-form" onSubmit={handleSubmit}>
       <div className="form-grid">
         <label>
-          First name
+          <span>First name<span className="required-mark">*</span></span>
           <input
             autoComplete="given-name"
+            className={errors.givenName ? "input--error" : ""}
             onChange={(event) => updateField("givenName", event.target.value)}
-            required
             value={form.givenName}
           />
         </label>
         <label>
-          Last name
+          <span>Last name<span className="required-mark">*</span></span>
           <input
             autoComplete="family-name"
+            className={errors.familyName ? "input--error" : ""}
             onChange={(event) => updateField("familyName", event.target.value)}
-            required
             value={form.familyName}
           />
         </label>
       </div>
       <label>
-        Work email
+        <span>Work email<span className="required-mark">*</span></span>
         <input
           autoComplete="email"
+          className={errors.email ? "input--error" : ""}
           onChange={(event) => updateField("email", event.target.value)}
-          required
           type="email"
           value={form.email}
         />
       </label>
       <label>
-        Organization name
+        <span>Organization name<span className="required-mark">*</span></span>
         <input
           autoComplete="organization"
+          className={errors.organizationName ? "input--error" : ""}
           onChange={(event) => updateField("organizationName", event.target.value)}
-          required
           value={form.organizationName}
         />
       </label>
-      <button className="button button-primary" disabled={isSubmitting} type="submit">
-        {isSubmitting ? "Provisioning..." : "Create organization"}
+      <label>
+        <span>Password<span className="required-mark">*</span></span>
+        <div className="password-field">
+          <input
+            autoComplete="new-password"
+            className={errors.password ? "input--error" : ""}
+            onChange={(event) => updateField("password", event.target.value)}
+            type={showPassword ? "text" : "password"}
+            value={form.password}
+          />
+          <button
+            className="password-toggle"
+            onClick={() => setShowPassword((v) => !v)}
+            type="button"
+          >
+            {showPassword ? (
+              <svg fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="18" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                <line x1="1" x2="23" y1="1" y2="23" />
+              </svg>
+            ) : (
+              <svg fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="18" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            )}
+          </button>
+        </div>
+      </label>
+      <button className="button button-primary" type="submit">
+        Create organization
       </button>
-      {status ? <p className="form-status">{status}</p> : null}
-      {error ? <p className="form-error">{error}</p> : null}
+      {submitError ? <p className="form-error">{submitError}</p> : null}
     </form>
   );
 }

@@ -6,6 +6,7 @@ type OnboardingRequest = {
   familyName?: string;
   givenName?: string;
   organizationName?: string;
+  password?: string;
 };
 
 type TokenResponse = {
@@ -13,8 +14,6 @@ type TokenResponse = {
   error?: string;
   error_description?: string;
 };
-
-type UserStoreApiResponse = unknown;
 
 const ONBOARDING_ERROR_MESSAGE = "We couldn't create your organization right now. Please try again in a moment.";
 
@@ -29,26 +28,11 @@ const rootTokenScopes =
 const organizationTokenScopes =
   process.env.ASGARDEO_ONBOARDING_ORG_SCOPES ??
   "internal_org_user_mgt_create internal_org_user_mgt_list";
-const userStoreEndpoint = "/o/api/server/v1/userstores";
-const userStorePollInterval = Number(process.env.ASGARDEO_ONBOARDING_USERSTORE_POLL_INTERVAL_MS ?? 1500);
-const userStoreReadyTimeout = Number(process.env.ASGARDEO_ONBOARDING_USERSTORE_TIMEOUT_MS ?? 30000);
+const orgPollInterval = Number(process.env.ASGARDEO_ONBOARDING_USERSTORE_POLL_INTERVAL_MS ?? 1500);
+const orgReadyTimeout = Number(process.env.ASGARDEO_ONBOARDING_USERSTORE_TIMEOUT_MS ?? 30000);
 
 function asText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function makeUsername(email: string) {
-  return email.trim().toLowerCase();
-}
-
-function makeOrgHandle(name: string) {
-  const handle = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 30);
-
-  return handle || `org-${Date.now()}`;
 }
 
 function sleep(ms: number) {
@@ -97,16 +81,20 @@ async function createOrganizationUser({
   accessToken,
   email,
   familyName,
-  givenName
+  givenName,
+  password
 }: {
   accessToken: string;
   email: string;
   familyName: string;
   givenName: string;
+  password?: string;
 }) {
   const config = getConfig();
-  const response = await fetch(`${config.baseUrl}/o/scim2/Users`, {
+  console.log(config);
+  console.log({
     body: JSON.stringify({
+      schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
       emails: [
         {
           primary: true,
@@ -117,10 +105,31 @@ async function createOrganizationUser({
         familyName,
         givenName
       },
-      "urn:scim:wso2:schema": {
-        askPassword: "true"
+      ...(password ? { password } : { "urn:scim:wso2:schema": { askPassword: "true" } }),
+      userName: `DEFAULT/${email}`
+    }),
+    headers: {
+      Accept: "application/scim+json",
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/scim+json"
+    },
+    method: "POST"
+  })
+  const response = await fetch(`${config.baseUrl}/o/scim2/Users`, {
+    body: JSON.stringify({
+      schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+      emails: [
+        {
+          primary: true,
+          value: email
+        }
+      ],
+      name: {
+        familyName,
+        givenName
       },
-      userName: makeUsername(email)
+      ...(password ? { password } : { "urn:scim:wso2:schema": { askPassword: "true" } }),
+      userName: `DEFAULT/${email}`
     }),
     headers: {
       Accept: "application/scim+json",
@@ -129,7 +138,7 @@ async function createOrganizationUser({
     },
     method: "POST"
   });
-  const body = await response.json().catch(() => ({}));
+  const body = await response.json();
 
   if (!response.ok) {
     const message = typeof body?.detail === "string" ? body.detail : "Failed to create the organization user.";
@@ -140,36 +149,9 @@ async function createOrganizationUser({
   return body;
 }
 
-function isDefaultUserStore(value: unknown): boolean {
-  if (Array.isArray(value)) {
-    return value.some(isDefaultUserStore);
-  }
-
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const candidate = value as Record<string, unknown>;
-  const possibleNameFields = [
-    candidate.name,
-    candidate.domain,
-    candidate.id,
-    candidate.userStoreName,
-    candidate.userstoreName,
-    candidate.userStoreDomain,
-    candidate.userstoreDomain
-  ];
-
-  if (possibleNameFields.some((field) => typeof field === "string" && field.toUpperCase() === "DEFAULT")) {
-    return true;
-  }
-
-  return Object.values(candidate).some(isDefaultUserStore);
-}
-
-async function fetchUserStores(accessToken: string): Promise<UserStoreApiResponse | null> {
+async function fetchOrganization(accessToken: string, organizationId: string): Promise<string | null> {
   const config = getConfig();
-  const response = await fetch(`${config.baseUrl}${userStoreEndpoint}`, {
+  const response = await fetch(`${config.baseUrl}/api/server/v1/organizations/${organizationId}`, {
     headers: {
       Accept: "application/json",
       Authorization: `Bearer ${accessToken}`
@@ -192,23 +174,23 @@ async function fetchUserStores(accessToken: string): Promise<UserStoreApiRespons
     throw new Error(message);
   }
 
-  return body;
+  return typeof body?.status === "string" ? body.status : null;
 }
 
-async function waitForDefaultUserStore(accessToken: string) {
+async function waitForOrganization(accessToken: string, organizationId: string) {
   const startedAt = Date.now();
 
-  while (Date.now() - startedAt < userStoreReadyTimeout) {
-    const userStores = await fetchUserStores(accessToken);
+  while (Date.now() - startedAt < orgReadyTimeout) {
+    const status = await fetchOrganization(accessToken, organizationId);
 
-    if (isDefaultUserStore(userStores)) {
+    if (status === "ACTIVE") {
       return;
     }
 
-    await sleep(userStorePollInterval);
+    await sleep(orgPollInterval);
   }
 
-  throw new Error("Timed out waiting for the workspace user store to become available.");
+  throw new Error("Timed out waiting for the workspace to become available.");
 }
 
 export async function POST(request: Request) {
@@ -218,6 +200,7 @@ export async function POST(request: Request) {
     const familyName = asText(payload.familyName);
     const givenName = asText(payload.givenName);
     const organizationName = asText(payload.organizationName);
+    const password = asText(payload.password) || undefined;
 
     if (!email || !givenName || !familyName || !organizationName) {
       return NextResponse.json({ message: "All onboarding fields are required." }, { status: 400 });
@@ -231,7 +214,6 @@ export async function POST(request: Request) {
     const organizationPayload: CreateOrganizationPayload = {
       description: `Workspace for ${organizationName}`,
       name: organizationName,
-      orgHandle: makeOrgHandle(organizationName),
       parentId: config.parentOrganizationId,
       type: "TENANT"
     };
@@ -243,6 +225,8 @@ export async function POST(request: Request) {
       payload: organizationPayload
     });
 
+    await waitForOrganization(rootAccessToken, organization.id);
+
     const organizationAccessToken = await getToken({
       grant_type: "organization_switch",
       scope: organizationTokenScopes,
@@ -250,13 +234,12 @@ export async function POST(request: Request) {
       token: rootAccessToken
     });
 
-    await waitForDefaultUserStore(organizationAccessToken);
-
     const user = await createOrganizationUser({
       accessToken: organizationAccessToken,
       email,
       familyName,
-      givenName
+      givenName,
+      password
     });
 
     return NextResponse.json({
