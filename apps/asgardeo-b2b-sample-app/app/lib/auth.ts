@@ -9,18 +9,20 @@ const roleClaimKeys = [
   "roles",
   "groups",
   "application_roles",
-  "http://wso2.org/claims/roles"
+  "http://wso2.org/claims/role",
+  "http://wso2.org/claims/roles",
+  "http://wso2.org/claims/groups"
 ];
 
 function normalizeRole(value: unknown): UserRole | null {
   const values = Array.isArray(value) ? value : typeof value === "string" ? value.split(/[,\s]+/) : [];
   const normalizedValues = values.map((item) => String(item).toLowerCase());
 
-  if (normalizedValues.includes("admin")) {
+  if (normalizedValues.some((item) => item === "admin" || item.endsWith("/admin") || item.endsWith(":admin"))) {
     return "ADMIN";
   }
 
-  if (normalizedValues.includes("member")) {
+  if (normalizedValues.some((item) => item === "member" || item.endsWith("/member") || item.endsWith(":member"))) {
     return "MEMBER";
   }
 

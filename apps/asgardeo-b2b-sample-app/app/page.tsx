@@ -1,62 +1,14 @@
 import Link from "next/link";
-import {
-  SignedIn,
-  SignedOut,
-  SignInButton,
-  SignOutButton,
-  SignUpButton
-} from "@asgardeo/nextjs";
+import { SignedIn, SignedOut, SignInButton } from "@asgardeo/nextjs";
+import { LandingHeader, LandingHeroCopy } from "./LandingAuth";
 
 export default function Home() {
   return (
     <main className="public-shell">
-      <nav className="topbar public-topbar">
-        <Link className="brand" href="/">
-          VoyageOps
-        </Link>
-        <div className="public-nav-links" aria-label="Landing page sections">
-          <a href="#platform">Platform</a>
-          <a href="#workflow">Workflow</a>
-          <a href="#outcomes">Outcomes</a>
-        </div>
-        <div className="nav-actions">
-          <SignedOut>
-            <SignInButton className="button button-primary">Sign in</SignInButton>
-          </SignedOut>
-          <SignedIn>
-            <Link className="button button-secondary" href="/dashboard">
-              Dashboard
-            </Link>
-            <SignOutButton className="button button-ghost">Sign out</SignOutButton>
-          </SignedIn>
-        </div>
-      </nav>
+      <LandingHeader />
 
       <section className="hero">
-        <div className="hero-copy">
-          <p className="eyebrow">B2B Travel Management</p>
-          <h1>Corporate travel control for every client workspace.</h1>
-          <p className="hero-text">
-            Coordinate flights, approvals, travel policies, and spend across multiple
-            organizations with a workspace built for agencies and enterprise travel teams.
-          </p>
-          <div className="hero-actions">
-            <SignedOut>
-              <SignUpButton className="button button-primary">Get started</SignUpButton>
-              <SignInButton className="button button-secondary">View demo workspace</SignInButton>
-            </SignedOut>
-            <SignedIn>
-              <Link className="button button-primary" href="/dashboard">
-                Open workspace
-              </Link>
-            </SignedIn>
-          </div>
-          <div className="hero-proof" aria-label="Platform highlights">
-            <span>Multi-tenant controls</span>
-            <span>Policy-aware booking</span>
-            <span>Centralized spend review</span>
-          </div>
-        </div>
+        <LandingHeroCopy />
 
         <div className="travel-board" aria-label="Travel management preview">
           <div className="board-header">
@@ -105,7 +57,7 @@ export default function Home() {
       <section className="public-section stats-band" aria-label="Travel operation metrics">
         <div>
           <strong>36</strong>
-          <span>client organizations managed from one workspace</span>
+          <span>client workspaces managed from one control center</span>
         </div>
         <div>
           <strong>$1.8M</strong>
@@ -119,17 +71,19 @@ export default function Home() {
 
       <section id="platform" className="public-section feature-section">
         <div className="section-intro">
-          <p className="eyebrow">Platform</p>
-          <h2>Everything agencies need after the booking request arrives.</h2>
+          <div>
+            <p className="eyebrow">Platform</p>
+            <h2>Everything agencies need after the booking request arrives.</h2>
+          </div>
           <p>
-            VoyageOps brings the operational pieces together so account managers, finance
+            Wayfinder Enterprise brings the operational pieces together so account managers, finance
             teams, and client admins can work from the same travel record.
           </p>
         </div>
         <div className="feature-grid">
           <article>
             <span>01</span>
-            <h3>Organization workspaces</h3>
+            <h3>Company workspaces</h3>
             <p>Separate client teams, travelers, policies, and billing context without losing central visibility.</p>
           </article>
           <article>
@@ -187,7 +141,7 @@ export default function Home() {
           </article>
           <article>
             <h3>Clearer client service</h3>
-            <p>Track requests, travelers, policies, and spend by organization without switching tools.</p>
+            <p>Track requests, travelers, policies, and spend by workspace without switching tools.</p>
           </article>
           <article>
             <h3>Cleaner spend reviews</h3>
@@ -198,12 +152,14 @@ export default function Home() {
 
       <section className="public-section cta-section">
         <div>
-          <p className="eyebrow">VoyageOps</p>
+          <p className="eyebrow">Wayfinder Enterprise</p>
           <h2>Make corporate travel feel coordinated before the itinerary is even booked.</h2>
         </div>
         <div className="hero-actions">
           <SignedOut>
-            <SignUpButton className="button button-primary">Create workspace</SignUpButton>
+            <Link className="button button-primary" href="/onboarding">
+              Create workspace
+            </Link>
             <SignInButton className="button button-secondary">Sign in</SignInButton>
           </SignedOut>
           <SignedIn>
@@ -216,9 +172,9 @@ export default function Home() {
 
       <footer className="public-footer">
         <Link className="brand" href="/">
-          VoyageOps
+          Wayfinder Enterprise
         </Link>
-        <p>B2B travel operations for agencies, finance teams, and client administrators.</p>
+        <p>Enterprise travel operations for agencies, finance teams, and client administrators.</p>
         <div>
           <a href="#platform">Platform</a>
           <a href="#workflow">Workflow</a>

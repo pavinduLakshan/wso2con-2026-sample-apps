@@ -1,4 +1,5 @@
-import Link from "next/link";
+import WorkspaceShell from "../WorkspaceShell";
+import { getCurrentUserRole } from "../lib/auth";
 
 const fares = [
   { route: "Colombo to Singapore", cabin: "Economy", price: "$482", status: "In policy" },
@@ -6,39 +7,45 @@ const fares = [
   { route: "Colombo to London", cabin: "Economy", price: "$1,140", status: "In policy" }
 ];
 
-export default function BookingsPage() {
-  return (
-    <main className="detail-page">
-      <nav className="detail-nav">
-        <Link className="brand" href="/dashboard">
-          VoyageOps
-        </Link>
-        <Link className="button button-secondary" href="/dashboard">
-          Back to dashboard
-        </Link>
-      </nav>
+export default async function BookingsPage() {
+  const role = await getCurrentUserRole();
+  const isAdmin = role === "ADMIN";
 
+  return (
+    <WorkspaceShell
+      activeHref="/bookings"
+      eyebrow={isAdmin ? "Admin workspace" : "Member workspace"}
+      role={role}
+      title={isAdmin ? "Book travel for any employee" : "Book your next flight"}
+    >
       <section className="booking-hero">
         <div>
-          <p className="eyebrow">Bookings</p>
-          <h1>Flight search with policy checks built in.</h1>
+          <p className="eyebrow">Flight booking</p>
+          <h2>Flight search with policy checks built in.</h2>
           <p>
-            Members can compare fares before booking. Admins can use this same surface to inspect
-            billing impact and out-of-policy requests.
+            {isAdmin
+              ? "Admins can book travel for employees while reviewing policy and billing impact."
+              : "Members can compare fares and choose compliant options for work travel."}
           </p>
         </div>
         <form className="search-form">
+          {isAdmin ? (
+            <label>
+              Traveler
+              <input defaultValue="Ava Fernando" />
+            </label>
+          ) : null}
           <label>
-            Traveler
-            <input defaultValue="Ava Fernando" />
+            From
+            <input defaultValue="Colombo" />
           </label>
           <label>
             Destination
             <input defaultValue="Singapore" />
           </label>
           <label>
-            Budget cap
-            <input defaultValue="$900" />
+            Depart
+            <input defaultValue="May 28" />
           </label>
           <button className="button button-primary" type="button">
             Check fares
@@ -52,7 +59,7 @@ export default function BookingsPage() {
             <p className="eyebrow">Available flights</p>
             <h2>Compliant options first</h2>
           </div>
-          <button className="button button-secondary">Export quote</button>
+          {isAdmin ? <button className="button button-secondary">Export quote</button> : null}
         </div>
         <div className="flight-list">
           {fares.map((fare) => (
@@ -70,6 +77,6 @@ export default function BookingsPage() {
           ))}
         </div>
       </section>
-    </main>
+    </WorkspaceShell>
   );
 }
