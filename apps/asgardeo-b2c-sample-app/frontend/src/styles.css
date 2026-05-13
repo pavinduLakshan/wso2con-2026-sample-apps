@@ -1597,6 +1597,41 @@ h1 {
   font-weight: 700;
 }
 
+.payment-field-with-toggle {
+  position: relative;
+}
+
+.payment-field-with-toggle input {
+  width: 100%;
+  padding-right: 44px;
+}
+
+.payment-field-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: #4b5563;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.payment-field-toggle:hover {
+  color: #111827;
+  background: rgba(17, 24, 39, 0.08);
+}
+
+.payment-field-toggle:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
 .standalone-button {
   width: auto;
   padding: 0 22px;

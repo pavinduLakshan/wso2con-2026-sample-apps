@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAsgardeo } from "@asgardeo/react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, CreditCard } from "lucide-react";
+import { ChevronLeft, CreditCard, Eye, EyeOff } from "lucide-react";
 import { createBooking, getBookedFlights, getFlight } from "../api";
 import { formatPrice, isSameFlight } from "../utils/bookings";
 import { buildFlightDetailsPath } from "../utils/routes";
@@ -12,6 +12,7 @@ export function PaymentPageWithAuth({ criteria, flightId }) {
   const [flight, setFlight] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [paymentState, setPaymentState] = useState("idle");
+  const [isCvcVisible, setIsCvcVisible] = useState(false);
   const [error, setError] = useState("");
   const userKey = user?.sub || user?.username || user?.userName || user?.email || "signed-in";
   const getAccessTokenRef = useRef(getAccessToken);
@@ -146,7 +147,18 @@ export function PaymentPageWithAuth({ criteria, flightId }) {
               </label>
               <label className="payment-field">
                 <span>CVC</span>
-                <input readOnly value="123" aria-label="CVC" />
+                <div className="payment-field-with-toggle">
+                  <input readOnly type={isCvcVisible ? "text" : "password"} value="123" aria-label="CVC" />
+                  <button
+                    className="payment-field-toggle"
+                    type="button"
+                    aria-label={isCvcVisible ? "Hide CVC" : "Show CVC"}
+                    aria-pressed={isCvcVisible}
+                    onClick={() => setIsCvcVisible((current) => !current)}
+                  >
+                    {isCvcVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </label>
             </div>
             <button
