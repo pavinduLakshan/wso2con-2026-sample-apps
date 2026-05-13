@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAsgardeo } from "@asgardeo/react";
-import { Heart } from "lucide-react";
+import { Heart, Plane } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { SearchPanel } from "../components/SearchPanel";
 import {
@@ -45,6 +45,15 @@ function BookingButton({ bookingState, children, onClick }) {
     >
       {isBooking ? "Booking..." : isConfirmed ? "Booked" : children}
     </button>
+  );
+}
+
+function LoadingResults() {
+  return (
+    <div className="empty-state results-loading" role="status" aria-live="polite">
+      <Plane className="results-loading__icon" size={24} aria-hidden="true" />
+      <span>Loading results...</span>
+    </div>
   );
 }
 
@@ -131,6 +140,7 @@ export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations,
   const navigate = useNavigate();
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFavoriteResultLoading, setIsFavoriteResultLoading] = useState(false);
   const [error, setError] = useState("");
   const [bookingStates, setBookingStates] = useState({});
   const [favorites, setFavorites] = useState(() => new Set());
@@ -161,7 +171,11 @@ export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations,
       }
     }
 
-    loadFavoritesFromCDS();
+    setIsFavoriteResultLoading(true);
+    loadFavoritesFromCDS().finally(() => {
+      setIsFavoriteResultLoading(false);
+    });
+
 
     return () => {
       isCurrent = false;
@@ -329,11 +343,11 @@ export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations,
       )}
 
       <section className="results-section" aria-label="Search results">
-        {isLoading && <p className="empty-state">Loading results...</p>}
-        {!isLoading && results.length === 0 && (
+        {(isLoading || isFavoriteResultLoading) && <LoadingResults />}
+        {!isLoading && !isFavoriteResultLoading && results.length === 0 && (
           <p className="empty-state">No results matched this search.</p>
         )}
-        {!isLoading &&
+        {!isLoading && !isFavoriteResultLoading &&
           results.map((item) => (
             <ResultCard
               category={criteria.category}

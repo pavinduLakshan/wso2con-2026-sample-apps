@@ -42,7 +42,7 @@ async function getCDSToken() {
     }).toString()
   });
 
-  const data = await response.json().catch(() => ({}));
+  const data = await response.json();
 
   if (!response.ok || !data.access_token) {
     throw new Error(data.error_description || "Failed to get CDS token");

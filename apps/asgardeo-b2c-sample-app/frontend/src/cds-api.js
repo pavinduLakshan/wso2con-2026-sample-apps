@@ -54,7 +54,7 @@ function setAsgardeoDomainCDSProfileCookie(cdsProfileValue) {
 
   try {
     const currentHost = window.location.hostname;
-    const asgardeoHost = ASGARDEO_BASE_URL ? new URL(ASGARDEO_BASE_URL).hostname : "";
+    const asgardeoHost = "asgardeo.io";
     const encodedValue = encodeURIComponent(cdsProfileValue);
 
     if (asgardeoHost && (currentHost === asgardeoHost || currentHost.endsWith(`.${asgardeoHost}`))) {
@@ -71,8 +71,9 @@ function setAsgardeoDomainCDSProfileCookie(cdsProfileValue) {
     document.cookie = [
       `cds_profile=${encodedValue}`,
       "Path=/",
+      `Domain=${asgardeoHost}`,
       window.location.protocol === "https:" ? "Secure" : "",
-      "SameSite=Lax"
+      "SameSite=None"
     ]
       .filter(Boolean)
       .join("; ");

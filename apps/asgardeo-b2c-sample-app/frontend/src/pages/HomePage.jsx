@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAsgardeo } from "@asgardeo/react";
+import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   Clock3,
@@ -12,8 +13,9 @@ import {
   Star
 } from "lucide-react";
 import { SearchPanel } from "../components/SearchPanel";
-import { createBooking, getFlight } from "../api";
+import { getFlight } from "../api";
 import { ASGARDEO_CLIENT_ID, getCDSProfile } from "../cds-api";
+import { buildFlightDetailsPath } from "../utils/routes";
 
 function extractFavoriteFlightIds(profile) {
   const normalizedProfile = profile?.data || profile?.profile || profile || {};
@@ -33,28 +35,24 @@ function extractFavoriteFlightIds(profile) {
   return [];
 }
 
-function QuickBookingButton({ bookingState, onClick }) {
-  const isBooking = bookingState === "booking";
-  const isConfirmed = bookingState === "confirmed";
-
+function QuickBookingButton({ onClick }) {
   return (
     <button
-      className={`card-action ${isConfirmed ? "card-action--confirmed" : ""}`}
+      className="card-action"
       type="button"
-      disabled={isBooking || isConfirmed}
       onClick={onClick}
     >
-      {isBooking ? "Booking..." : isConfirmed ? "Booked" : "Book flight"}
+      Book flight
     </button>
   );
 }
 
 function QuickBookingsSection({ cdsProfileId }) {
+  const navigate = useNavigate();
   const { getAccessToken } = useAsgardeo();
   const [favoriteFlights, setFavoriteFlights] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [bookingStates, setBookingStates] = useState({});
 
   useEffect(() => {
     let isCurrent = true;
@@ -114,33 +112,9 @@ function QuickBookingsSection({ cdsProfileId }) {
     };
   }, [cdsProfileId]);
 
-  async function handleBooking(itemId) {
+  function handleBooking(itemId) {
     setError("");
-    setBookingStates((current) => ({
-      ...current,
-      [itemId]: "booking"
-    }));
-
-    try {
-      const accessToken = getAccessToken ? await getAccessToken() : null;
-
-      await createBooking({
-        type: "flight",
-        itemId,
-        travelers: 1
-      }, accessToken);
-
-      setBookingStates((current) => ({
-        ...current,
-        [itemId]: "confirmed"
-      }));
-    } catch (requestError) {
-      setBookingStates((current) => ({
-        ...current,
-        [itemId]: requestError.message.includes("already exists") ? "confirmed" : "idle"
-      }));
-      setError(requestError.message);
-    }
+    navigate(buildFlightDetailsPath(itemId));
   }
 
   return (
@@ -178,10 +152,7 @@ function QuickBookingsSection({ cdsProfileId }) {
               <div className="result-side">
                 <strong>{flight.currency === "USD" ? "$" : `${flight.currency} `}{flight.price}</strong>
                 <span>{flight.cabin}</span>
-                <QuickBookingButton
-                  bookingState={bookingStates[flight.id] || "idle"}
-                  onClick={() => handleBooking(flight.id)}
-                />
+                <QuickBookingButton onClick={() => handleBooking(flight.id)} />
               </div>
             </article>
           ))}
