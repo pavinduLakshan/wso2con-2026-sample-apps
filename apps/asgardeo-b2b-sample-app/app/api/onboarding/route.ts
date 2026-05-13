@@ -193,6 +193,49 @@ async function waitForOrganization(accessToken: string, organizationId: string) 
   throw new Error("Timed out waiting for the workspace to become available.");
 }
 
+async function fetchDefaultUserStore(accessToken: string): Promise<boolean> {
+  const config = getConfig();
+  const response = await fetch(`${config.baseUrl}/o/api/server/v1/userstores/REVGQVVMVA`, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`
+    },
+    method: "GET"
+  });
+
+  if (response.status === 404) {
+    return false;
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const message =
+      body && typeof body === "object" && "message" in body && typeof body.message === "string"
+        ? body.message
+        : "Failed to check user store readiness.";
+
+    throw new Error(message);
+  }
+
+  return true;
+}
+
+async function waitForDefaultUserStore(accessToken: string) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < orgReadyTimeout) {
+    const ready = await fetchDefaultUserStore(accessToken);
+
+    if (ready) {
+      return;
+    }
+
+    await sleep(orgPollInterval);
+  }
+
+  throw new Error("Timed out waiting for the user store to become available.");
+}
+
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as OnboardingRequest;
@@ -233,6 +276,8 @@ export async function POST(request: Request) {
       switching_organization: organization.id,
       token: rootAccessToken
     });
+
+    await waitForDefaultUserStore(organizationAccessToken);
 
     const user = await createOrganizationUser({
       accessToken: organizationAccessToken,
