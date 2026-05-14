@@ -1,25 +1,10 @@
-import { asgardeoMiddleware, createRouteMatcher } from "@asgardeo/nextjs/middleware";
+import { type NextRequest, NextResponse } from "next/server";
 
-const isProtectedRoute = createRouteMatcher([
-  "/dashboard",
-  "/dashboard/(.*)",
-  "/bookings",
-  "/bookings/(.*)",
-  "/requests",
-  "/requests/(.*)",
-  "/organization",
-  "/organization/(.*)"
-]);
-
-export default asgardeoMiddleware(async (asgardeo, request) => {
-  if (isProtectedRoute(request)) {
-    const protectionResult = await asgardeo.protectRoute();
-
-    if (protectionResult) {
-      return protectionResult;
-    }
-  }
-});
+export default function middleware(request: NextRequest) {
+  const response = NextResponse.next();
+  response.headers.set("x-url", request.nextUrl.pathname + request.nextUrl.search);
+  return response;
+}
 
 export const config = {
   matcher: [

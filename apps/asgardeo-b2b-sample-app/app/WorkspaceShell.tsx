@@ -1,6 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { SignOutButton, UserDropdown } from "@asgardeo/nextjs";
+import { useAuth } from "./lib/auth-client";
 import AdminSidebar from "./AdminSidebar";
 import type { UserRole } from "./lib/auth";
 
@@ -12,10 +14,13 @@ const adminNavItems = [
 ];
 
 function ProfileActions() {
+  const { signOut } = useAuth();
+
   return (
     <div className="profile-actions">
-      <UserDropdown />
-      <SignOutButton className="button button-ghost">Sign out</SignOutButton>
+      <button className="button button-ghost" onClick={signOut} type="button">
+        Sign out
+      </button>
     </div>
   );
 }

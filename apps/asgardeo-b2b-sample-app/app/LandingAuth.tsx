@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { SignInButton, SignOutButton, useAsgardeo } from "@asgardeo/nextjs";
+import { useAuth } from "./lib/auth-client";
 
 type UserRecord = Record<string, unknown>;
 
@@ -81,7 +81,7 @@ function getInitials(displayName: string) {
 }
 
 function useLandingUser() {
-  const { isSignedIn, user } = useAsgardeo();
+  const { isSignedIn, user, signIn, signOut } = useAuth();
   const userRecord = user && typeof user === "object" ? (user as UserRecord) : undefined;
   const displayName = getDisplayName(userRecord);
   const email = getEmail(userRecord);
@@ -91,12 +91,14 @@ function useLandingUser() {
     email,
     firstName: displayName === "Workspace user" ? "there" : getFirstName(displayName),
     initials: getInitials(displayName),
-    isSignedIn: Boolean(isSignedIn)
+    isSignedIn,
+    signIn,
+    signOut
   };
 }
 
 export function LandingHeader() {
-  const { displayName, email, initials, isSignedIn } = useLandingUser();
+  const { displayName, email, initials, isSignedIn, signIn, signOut } = useLandingUser();
 
   return (
     <nav className="topbar public-topbar">
@@ -123,14 +125,18 @@ export function LandingHeader() {
             <Link className="button button-secondary" href="/dashboard">
               Dashboard
             </Link>
-            <SignOutButton className="button button-ghost">Sign out</SignOutButton>
+            <button className="button button-ghost" onClick={signOut} type="button">
+              Sign out
+            </button>
           </>
         ) : (
           <>
             <Link className="button button-secondary" href="/onboarding">
               Onboard
             </Link>
-            <SignInButton className="button button-primary">Sign in</SignInButton>
+            <button className="button button-primary" onClick={() => signIn()} type="button">
+              Sign in
+            </button>
           </>
         )}
       </div>
@@ -139,7 +145,7 @@ export function LandingHeader() {
 }
 
 export function LandingHeroCopy() {
-  const { firstName, isSignedIn } = useLandingUser();
+  const { firstName, isSignedIn, signIn } = useLandingUser();
 
   if (isSignedIn) {
     return (
@@ -178,7 +184,9 @@ export function LandingHeroCopy() {
         <Link className="button button-primary" href="/onboarding">
           Get started
         </Link>
-        <SignInButton className="button button-secondary">View demo workspace</SignInButton>
+        <button className="button button-secondary" onClick={() => signIn()} type="button">
+          View demo workspace
+        </button>
       </div>
       <div className="hero-proof" aria-label="Platform highlights">
         <span>Multi-workspace controls</span>
