@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAsgardeo } from "@asgardeo/react";
 import { Link } from "react-router-dom";
 import { getBookedFlights } from "../api";
+import { createSignInConfigWithCDSTracker } from "../cds-api";
 import { formatPrice, getBookingReference } from "../utils/bookings";
 
 export function BookingsPageWithAuth() {
@@ -61,7 +62,14 @@ export function BookingsPageWithAuth() {
             <h1>Sign in to manage your bookings.</h1>
             <p>View confirmed trips, booking status, passenger count, and flight details.</p>
           </div>
-          <button className="dashboard-action dashboard-action--secondary" type="button" onClick={() => signIn()}>
+          <button
+            className="dashboard-action dashboard-action--secondary"
+            type="button"
+            onClick={async () => {
+              const signInConfig = await createSignInConfigWithCDSTracker();
+              signIn(signInConfig);
+            }}
+          >
             Sign in
           </button>
         </section>

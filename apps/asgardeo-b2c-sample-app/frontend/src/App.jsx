@@ -12,7 +12,12 @@ import {
 } from "lucide-react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { getLocations } from "./api";
-import { clearCDSCookies, ensureCDSProfile, initializeCDSFromCookie } from "./cds-api";
+import {
+  clearCDSCookies,
+  createSignInConfigWithCDSTracker,
+  ensureCDSProfile,
+  initializeCDSFromCookie
+} from "./cds-api";
 import { BookingDetailsPageWithAuth } from "./pages/BookingDetailsPageWithAuth";
 import { BookingsPageWithAuth } from "./pages/BookingsPageWithAuth";
 import { BookingsUnavailable } from "./pages/BookingsUnavailable";
@@ -186,7 +191,10 @@ function LiveAuthHeader() {
         className="text-button"
         type="button"
         disabled={isLoading}
-        onClick={() => signIn()}
+        onClick={async () => {
+          const signInConfig = await createSignInConfigWithCDSTracker();
+          signIn(signInConfig);
+        }}
       >
         Sign in
       </button>

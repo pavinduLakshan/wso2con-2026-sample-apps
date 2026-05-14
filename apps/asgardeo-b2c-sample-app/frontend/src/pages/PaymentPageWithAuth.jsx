@@ -3,6 +3,7 @@ import { useAsgardeo } from "@asgardeo/react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, CreditCard, Eye, EyeOff } from "lucide-react";
 import { createBooking, getBookedFlights, getFlight } from "../api";
+import { createSignInConfigWithCDSTracker } from "../cds-api";
 import { formatPrice, isSameFlight } from "../utils/bookings";
 import { buildFlightDetailsPath } from "../utils/routes";
 
@@ -113,7 +114,14 @@ export function PaymentPageWithAuth({ criteria, flightId }) {
             <h1>Sign in to complete payment.</h1>
             <p>Your flight will be booked only after payment is completed.</p>
           </div>
-          <button className="dashboard-action dashboard-action--secondary" type="button" onClick={() => signIn()}>
+          <button
+            className="dashboard-action dashboard-action--secondary"
+            type="button"
+            onClick={async () => {
+              const signInConfig = await createSignInConfigWithCDSTracker();
+              signIn(signInConfig);
+            }}
+          >
             Sign in
           </button>
         </section>

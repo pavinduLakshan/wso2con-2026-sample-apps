@@ -3,6 +3,7 @@ import { useAsgardeo } from "@asgardeo/react";
 import { Link } from "react-router-dom";
 import { Ban, ChevronLeft, Plane, ShieldCheck } from "lucide-react";
 import { cancelBooking, getBookedFlights } from "../api";
+import { createSignInConfigWithCDSTracker } from "../cds-api";
 import { formatPrice, getBookingReference } from "../utils/bookings";
 
 const walletCredentialOffer = import.meta.env.VITE_WALLET_CREDENTIAL_OFFER || "";
@@ -98,7 +99,14 @@ export function BookingDetailsPageWithAuth({ bookingId }) {
             <h1>Sign in to view this booking.</h1>
             <p>Booking details are available after authentication.</p>
           </div>
-          <button className="dashboard-action dashboard-action--secondary" type="button" onClick={() => signIn()}>
+          <button
+            className="dashboard-action dashboard-action--secondary"
+            type="button"
+            onClick={async () => {
+              const signInConfig = await createSignInConfigWithCDSTracker();
+              signIn(signInConfig);
+            }}
+          >
             Sign in
           </button>
         </section>
