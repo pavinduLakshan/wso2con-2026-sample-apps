@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAsgardeo } from "@asgardeo/nextjs";
+import { useAuth } from "../lib/auth-client";
 import LoadingScreen, { LoadingStep } from "../LoadingScreen";
 import PlanSelection from "./PlanSelection";
 
@@ -66,7 +66,7 @@ const INITIAL_STEPS: LoadingStep[] = [
 type Phase = "form" | "plan" | "submitting";
 
 export default function OnboardingForm() {
-  const { isSignedIn, signIn, switchOrganization } = useAsgardeo();
+  const { switchOrganization } = useAuth();
   const [form, setForm] = useState<FormState>(initialForm);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState("");
@@ -125,18 +125,10 @@ export default function OnboardingForm() {
 
       setStepStatus(1, "done");
       setStepStatus(2, "active");
-
-      if (isSignedIn && switchOrganization) {
-        await switchOrganization(result.organization);
-        setStepStatus(2, "done");
-        await new Promise((resolve) => setTimeout(resolve, 1200));
-        window.location.assign("/dashboard");
-        return;
-      }
-
       setStepStatus(2, "done");
+
       await new Promise((resolve) => setTimeout(resolve, 1200));
-      await signIn?.();
+      switchOrganization(result.organization);
     } catch {
       setSubmitError(ONBOARDING_ERROR_MESSAGE);
       await new Promise((resolve) => setTimeout(resolve, 2200));

@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { SignedIn, SignedOut, SignInButton } from "@asgardeo/nextjs";
 import { LandingHeader, LandingHeroCopy } from "./LandingAuth";
+import HeroCtaSection from "./HeroCtaSection";
 
 export default function Home() {
   return (
@@ -155,19 +155,7 @@ export default function Home() {
           <p className="eyebrow">Wayfinder Enterprise</p>
           <h2>Make corporate travel feel coordinated before the itinerary is even booked.</h2>
         </div>
-        <div className="hero-actions">
-          <SignedOut>
-            <Link className="button button-primary" href="/onboarding">
-              Create workspace
-            </Link>
-            <SignInButton className="button button-secondary">Sign in</SignInButton>
-          </SignedOut>
-          <SignedIn>
-            <Link className="button button-primary" href="/dashboard">
-              Go to dashboard
-            </Link>
-          </SignedIn>
-        </div>
+        <HeroCtaSection />
       </section>
 
       <footer className="public-footer">

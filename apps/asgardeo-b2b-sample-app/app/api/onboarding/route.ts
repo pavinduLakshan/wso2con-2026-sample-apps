@@ -1,4 +1,3 @@
-import { createOrganization, type CreateOrganizationPayload } from "@asgardeo/node";
 import { NextResponse } from "next/server";
 
 type OnboardingRequest = {
@@ -15,21 +14,28 @@ type TokenResponse = {
   error_description?: string;
 };
 
+type Organization = {
+  id: string;
+  name: string;
+  orgHandle: string;
+  status: string;
+};
+
 const ONBOARDING_ERROR_MESSAGE = "We couldn't create your organization right now. Please try again in a moment.";
 
 const baseUrl = process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL;
 const clientId = process.env.ASGARDEO_CLIENT_ID ?? process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID;
 const clientSecret = process.env.ASGARDEO_CLIENT_SECRET ?? process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_SECRET;
-const parentOrganizationId =
-  process.env.ASGARDEO_ONBOARDING_PARENT_ORGANIZATION_ID ?? process.env.ASGARDEO_PARENT_ORGANIZATION_ID;
+const parentOrganizationId = process.env.ASGARDEO_PARENT_ORGANIZATION_ID;
 const rootTokenScopes =
-  process.env.ASGARDEO_ONBOARDING_ROOT_SCOPES ??
+  process.env.ASGARDEO_ROOT_SCOPES ??
   "internal_organization_create internal_organization_view internal_org_user_mgt_create internal_org_user_mgt_list";
 const organizationTokenScopes =
-  process.env.ASGARDEO_ONBOARDING_ORG_SCOPES ??
+  process.env.ASGARDEO_ORG_SCOPES ??
   "internal_org_user_mgt_create internal_org_user_mgt_list";
-const orgPollInterval = Number(process.env.ASGARDEO_ONBOARDING_USERSTORE_POLL_INTERVAL_MS ?? 1500);
-const orgReadyTimeout = Number(process.env.ASGARDEO_ONBOARDING_USERSTORE_TIMEOUT_MS ?? 30000);
+const pollInterval = Number(process.env.ASGARDEO_POLL_INTERVAL_MS ?? 1500);
+const orgReadyTimeout = Number(process.env.ASGARDEO_USERSTORE_TIMEOUT_MS ?? 30000);
+const userCreationRetryTimeout = Number(process.env.ASGARDEO_USER_CREATION_RETRY_TIMEOUT_MS ?? 30000);
 
 function asText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -75,6 +81,36 @@ async function getToken(params: Record<string, string>) {
   }
 
   return body.access_token;
+}
+
+async function createOrganization(accessToken: string, name: string): Promise<Organization> {
+  const config = getConfig();
+  const response = await fetch(`${config.baseUrl}/api/server/v1/organizations`, {
+    body: JSON.stringify({
+      description: `Workspace for ${name}`,
+      name,
+      parentId: config.parentOrganizationId,
+      type: "TENANT"
+    }),
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    },
+    method: "POST"
+  });
+  const body = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message =
+      body && typeof body === "object" && "message" in body && typeof body.message === "string"
+        ? body.message
+        : "Failed to create the organization.";
+
+    throw new Error(message);
+  }
+
+  return body as Organization;
 }
 
 async function createOrganizationUser({
@@ -123,13 +159,33 @@ async function createOrganizationUser({
   });
   const body = await response.json().catch(() => ({}));
 
-  if (!response.ok) {
+  return { body, ok: response.ok, status: response.status };
+}
+
+async function createOrganizationUserWithRetry(args: {
+  accessToken: string;
+  email: string;
+  familyName: string;
+  givenName: string;
+  password?: string;
+}) {
+  const startedAt = Date.now();
+
+  while (true) {
+    const { body, ok, status } = await createOrganizationUser(args);
+
+    if (ok) {
+      return body;
+    }
+
     const message = typeof body?.detail === "string" ? body.detail : "Failed to create the organization user.";
 
-    throw new Error(message);
-  }
+    if (status !== 400 || Date.now() - startedAt >= userCreationRetryTimeout) {
+      throw new Error(message);
+    }
 
-  return body;
+    await sleep(pollInterval);
+  }
 }
 
 async function fetchOrganization(accessToken: string, organizationId: string): Promise<string | null> {
@@ -170,7 +226,7 @@ async function waitForOrganization(accessToken: string, organizationId: string) 
       return;
     }
 
-    await sleep(orgPollInterval);
+    await sleep(pollInterval);
   }
 
   throw new Error("Timed out waiting for the workspace to become available.");
@@ -186,7 +242,7 @@ async function fetchDefaultUserStore(accessToken: string): Promise<boolean> {
     method: "GET"
   });
 
-  if (response.status === 404) {
+  if (response.status === 404 || response.status === 500 || response.status === 503) {
     return false;
   }
 
@@ -213,7 +269,7 @@ async function waitForDefaultUserStore(accessToken: string) {
       return;
     }
 
-    await sleep(orgPollInterval);
+    await sleep(pollInterval);
   }
 
   throw new Error("Timed out waiting for the user store to become available.");
@@ -232,24 +288,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "All onboarding fields are required." }, { status: 400 });
     }
 
-    const config = getConfig();
     const rootAccessToken = await getToken({
       grant_type: "client_credentials",
       scope: rootTokenScopes
     });
-    const organizationPayload: CreateOrganizationPayload = {
-      description: `Workspace for ${organizationName}`,
-      name: organizationName,
-      parentId: config.parentOrganizationId,
-      type: "TENANT"
-    };
-    const organization = await createOrganization({
-      baseUrl: config.baseUrl,
-      headers: {
-        Authorization: `Bearer ${rootAccessToken}`
-      },
-      payload: organizationPayload
-    });
+
+    const organization = await createOrganization(rootAccessToken, organizationName);
 
     await waitForOrganization(rootAccessToken, organization.id);
 
@@ -262,7 +306,7 @@ export async function POST(request: Request) {
 
     await waitForDefaultUserStore(organizationAccessToken);
 
-    const user = await createOrganizationUser({
+    const user = await createOrganizationUserWithRetry({
       accessToken: organizationAccessToken,
       email,
       familyName,
