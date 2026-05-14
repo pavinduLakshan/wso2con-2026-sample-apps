@@ -91,36 +91,19 @@ async function createOrganizationUser({
   password?: string;
 }) {
   const config = getConfig();
-  console.log(config);
-  console.log({
-    body: JSON.stringify({
-      schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
-      emails: [
-        {
-          primary: true,
-          value: email
-        }
-      ],
-      name: {
-        familyName,
-        givenName
-      },
-      ...(password ? { password } : { "urn:scim:wso2:schema": { askPassword: "true" } }),
-      userName: `DEFAULT/${email}`
-    }),
-    headers: {
-      Accept: "application/scim+json",
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/scim+json"
-    },
-    method: "POST"
-  })
+  const schemas = ["urn:ietf:params:scim:schemas:core:2.0:User"];
+
+  if (!password) {
+    schemas.push("urn:scim:wso2:schema");
+  }
+
   const response = await fetch(`${config.baseUrl}/o/scim2/Users`, {
     body: JSON.stringify({
-      schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+      schemas,
       emails: [
         {
           primary: true,
+          type: "work",
           value: email
         }
       ],
@@ -138,7 +121,7 @@ async function createOrganizationUser({
     },
     method: "POST"
   });
-  const body = await response.json();
+  const body = await response.json().catch(() => ({}));
 
   if (!response.ok) {
     const message = typeof body?.detail === "string" ? body.detail : "Failed to create the organization user.";
