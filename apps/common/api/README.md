@@ -35,6 +35,11 @@ GET  /api/trips
 GET  /api/locations?category=flights
 POST /api/bookings
 GET  /api/bookings/flights
+GET  /api/bookings/flights/:bookingId
+PATCH /api/bookings/:bookingId/price
+PATCH /api/bookings/:bookingId/cancel
+POST /api/deal-alert-consents
+GET  /api/deal-alert-consents/:username
 GET  /api/me
 ```
 
@@ -57,6 +62,7 @@ openapi.yaml
 ## Asgardeo API Protection
 
 By default, `API_REQUIRE_AUTH=false` so the frontend can call the sample API during local demos.
+When auth is disabled but a request includes an Asgardeo bearer token, the API uses the token claims for booking ownership instead of the local demo user.
 
 To require Asgardeo access tokens for protected endpoints:
 
@@ -78,4 +84,6 @@ Protected endpoints:
 POST /api/bookings
 GET  /api/bookings/flights
 GET  /api/me
+PATCH /api/bookings/:bookingId/price
+PATCH /api/bookings/:bookingId/cancel
 ```

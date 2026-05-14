@@ -18,6 +18,27 @@ async function requestJson(path, options = {}) {
   return body;
 }
 
+function getUserHeaders(user) {
+  const headers = {};
+  const username = user?.username || user?.userName || user?.email || user?.sub || user?.id || "";
+  const userId = user?.sub || user?.id || username;
+  const email = user?.email || user?.mail || "";
+
+  if (username) {
+    headers["X-Wayfinder-Username"] = username;
+  }
+
+  if (userId) {
+    headers["X-Wayfinder-User-Id"] = userId;
+  }
+
+  if (email) {
+    headers["X-Wayfinder-Email"] = email;
+  }
+
+  return headers;
+}
+
 export async function getFlights(searchParams = {}) {
   const params = new URLSearchParams();
 
@@ -84,19 +105,37 @@ export async function getLocations(searchParams = {}) {
   return response.data;
 }
 
-export async function createBooking(booking, accessToken) {
+export async function createBooking(booking, accessToken, user) {
   const response = await requestJson("/api/bookings", {
     method: "POST",
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    headers: {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...getUserHeaders(user)
+    },
     body: JSON.stringify(booking)
   });
 
   return response;
 }
 
-export async function getBookedFlights(accessToken) {
+export async function getBookedFlights(accessToken, user) {
   const response = await requestJson("/api/bookings/flights", {
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+    headers: {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...getUserHeaders(user)
+    }
+  });
+
+  return response.data;
+}
+
+export async function cancelBooking(bookingId, accessToken, user) {
+  const response = await requestJson(`/api/bookings/${encodeURIComponent(bookingId)}/cancel`, {
+    method: "PATCH",
+    headers: {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...getUserHeaders(user)
+    }
   });
 
   return response.data;

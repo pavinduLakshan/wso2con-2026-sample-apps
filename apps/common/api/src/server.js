@@ -4,14 +4,19 @@ import { URL } from "node:url";
 import "dotenv/config";
 import { resolveUser } from "./auth.js";
 import {
+  cancelBookedFlight,
   createBookingRecord,
   findDuplicateBooking,
   findFlightById,
   findFlights,
   findHotels,
+  getBookedFlightById,
   listBookedFlights,
+  listEnabledDealAlertConsents,
   listLocations,
-  listTrips
+  listTrips,
+  updateBookedFlightPrice,
+  upsertDealAlertConsent
 } from "./db.js";
 
 const port = Number(process.env.PORT || 8787);
@@ -76,7 +81,7 @@ function sendJson(response, statusCode, body) {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": frontendOrigin,
     "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type,Authorization"
+    "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Wayfinder-User-Id,X-Wayfinder-Username,X-Wayfinder-Email"
   });
   response.end(JSON.stringify(body));
 }
@@ -111,12 +116,31 @@ function searchHotels(params) {
 }
 
 function generateBookingReference() {
-  return `WF-${randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+  return randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase();
+}
+
+function assertNonEmptyString(value, fieldName) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`${fieldName} is required`);
+  }
+
+  return value.trim();
 }
 
 async function handleBooking(request) {
-  const user = await resolveUser(request);
   const body = await readJsonBody(request);
+  const resolvedUser = await resolveUser(request);
+  const bodyUser = body.user && typeof body.user === "object" ? body.user : {};
+  const canUseBodyUser = process.env.API_REQUIRE_AUTH !== "true" && resolvedUser.id === "local-demo-user";
+  const user = canUseBodyUser && (bodyUser.username || bodyUser.email || bodyUser.id)
+    ? {
+        id: bodyUser.id || bodyUser.username || bodyUser.email,
+        username: bodyUser.username || bodyUser.email || bodyUser.id,
+        email: bodyUser.email,
+        givenName: resolvedUser.givenName,
+        familyName: resolvedUser.familyName
+      }
+    : resolvedUser;
   const itemType = body.type;
   const itemId = body.itemId;
   const travelers = Number(body.travelers || 1);
@@ -163,6 +187,102 @@ async function handleBooking(request) {
   return {
     statusCode: 201,
     body: booking
+  };
+}
+
+async function handleDealAlertConsent(request) {
+  const body = await readJsonBody(request);
+  let bookingId;
+  let routeFrom;
+  let routeTo;
+
+  try {
+    bookingId = assertNonEmptyString(body.bookingId, "bookingId");
+    routeFrom = assertNonEmptyString(body.routeFrom, "routeFrom");
+    routeTo = assertNonEmptyString(body.routeTo, "routeTo");
+  } catch (error) {
+    return {
+      statusCode: 400,
+      body: { error: error.message }
+    };
+  }
+
+  const booking = getBookedFlightById(bookingId);
+
+  if (!booking) {
+    return {
+      statusCode: 404,
+      body: { error: "Flight booking not found" }
+    };
+  }
+
+  const consent = upsertDealAlertConsent({
+    id: `deal-alert-consent-${randomUUID()}`,
+    bookingId,
+    username: booking.username,
+    routeFrom,
+    routeTo,
+    enabled: Boolean(body.enabled),
+    now: new Date().toISOString()
+  });
+
+  return {
+    statusCode: 200,
+    body: { data: consent }
+  };
+}
+
+async function handleBookingPriceUpdate(request, bookingId) {
+  const user = await resolveUser(request);
+  const body = await readJsonBody(request);
+  const price = Number(body.price);
+  const tokenUsername = user.username || user.email || user.id;
+  const username = process.env.API_REQUIRE_AUTH === "true" ? tokenUsername : body.username || tokenUsername;
+
+  if (!Number.isFinite(price) || price <= 0) {
+    return {
+      statusCode: 400,
+      body: { error: "price must be a positive number" }
+    };
+  }
+
+  const booking = updateBookedFlightPrice({
+    bookingId,
+    username,
+    price
+  });
+
+  if (!booking) {
+    return {
+      statusCode: 404,
+      body: { error: "Flight booking not found for username" }
+    };
+  }
+
+  return {
+    statusCode: 200,
+    body: { data: booking }
+  };
+}
+
+async function handleBookingCancel(request, bookingId) {
+  const user = await resolveUser(request);
+  const username = user.username || user.email || user.id;
+  const booking = cancelBookedFlight({
+    bookingId,
+    username
+  });
+
+  if (!booking) {
+    return {
+      statusCode: 404,
+      body: { error: "Flight booking not found for username" }
+    };
+  }
+
+  return {
+    statusCode: 200,
+    body: { data: booking }
   };
 }
 
@@ -234,10 +354,49 @@ async function route(request, response) {
       });
     }
 
+    if (request.method === "GET" && url.pathname.startsWith("/api/bookings/flights/")) {
+      const bookingId = decodeURIComponent(url.pathname.replace("/api/bookings/flights/", ""));
+      const booking = getBookedFlightById(bookingId);
+
+      if (!booking) {
+        return sendJson(response, 404, { error: "Flight booking not found" });
+      }
+
+      return sendJson(response, 200, { data: booking });
+    }
+
     if (request.method === "POST" && url.pathname === "/api/bookings") {
       const result = await handleBooking(request);
 
       return sendJson(response, result.statusCode, result.body);
+    }
+
+    if (request.method === "PATCH" && url.pathname.startsWith("/api/bookings/") && url.pathname.endsWith("/price")) {
+      const bookingId = decodeURIComponent(url.pathname.replace("/api/bookings/", "").replace("/price", ""));
+      const result = await handleBookingPriceUpdate(request, bookingId);
+
+      return sendJson(response, result.statusCode, result.body);
+    }
+
+    if (request.method === "PATCH" && url.pathname.startsWith("/api/bookings/") && url.pathname.endsWith("/cancel")) {
+      const bookingId = decodeURIComponent(url.pathname.replace("/api/bookings/", "").replace("/cancel", ""));
+      const result = await handleBookingCancel(request, bookingId);
+
+      return sendJson(response, result.statusCode, result.body);
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/deal-alert-consents") {
+      const result = await handleDealAlertConsent(request);
+
+      return sendJson(response, result.statusCode, result.body);
+    }
+
+    if (request.method === "GET" && url.pathname.startsWith("/api/deal-alert-consents/")) {
+      const username = decodeURIComponent(url.pathname.replace("/api/deal-alert-consents/", ""));
+
+      return sendJson(response, 200, {
+        data: listEnabledDealAlertConsents(username)
+      });
     }
 
     if (request.method === "POST" && url.pathname === "/api/cds/profiles") {

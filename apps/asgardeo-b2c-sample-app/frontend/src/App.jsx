@@ -108,7 +108,8 @@ function LiveAuthHeader() {
   const lastName = user?.name?.familyName || "";
   const fullName = `${firstName} ${lastName}`.trim();
   const email = user?.email || user?.mail || user?.username || user?.userName || "";
-  const displayName = fullName || email || user?.sub || "Traveler";
+  const displayName = fullName || email || user?.sub || "";
+  const isUserResolving = isSignedIn && (!user || !displayName);
 
   useEffect(() => {
     function handlePointerDown(event) {
@@ -123,6 +124,17 @@ function LiveAuthHeader() {
       document.removeEventListener("pointerdown", handlePointerDown);
     };
   }, []);
+
+  if (isUserResolving) {
+    return (
+      <div className="auth-cluster">
+        <div className="user-chip user-chip--loading" role="status" aria-live="polite">
+          <span className="user-chip-spinner" aria-hidden="true" />
+          <span className="user-chip-name">Loading account...</span>
+        </div>
+      </div>
+    );
+  }
 
   if (isSignedIn) {
     return (
@@ -249,9 +261,11 @@ function ChatWidget() {
   const [messages, setMessages] = useState([
     createChatMessage("assistant", "Hi, I can help with travel questions and booking details.")
   ]);
+  const [dealAlertRequest, setDealAlertRequest] = useState(null);
   const [draft, setDraft] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const socketRef = useRef(null);
+  const queuedAgentMessageRef = useRef(null);
   const reconnectTimerRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -281,6 +295,12 @@ function ChatWidget() {
 
         retryDelay = 700;
         setConnectionStatus("connected");
+
+        if (queuedAgentMessageRef.current) {
+          const queuedMessage = queuedAgentMessageRef.current;
+          queuedAgentMessageRef.current = null;
+          socket.send(JSON.stringify({ message: queuedMessage }));
+        }
       });
 
       socket.addEventListener("message", (event) => {
@@ -351,6 +371,66 @@ function ChatWidget() {
     }
   }, [isOpen, messages]);
 
+  useEffect(() => {
+    function handleDealAlertConsent(event) {
+      const request = event.detail;
+
+      if (!request?.bookingId || !request?.username || !request?.routeFrom || !request?.routeTo) {
+        return;
+      }
+
+      setDealAlertRequest(request);
+      setIsOpen(true);
+      setMessages((current) => [
+        ...current,
+        createChatMessage(
+          "assistant",
+          `Would you like offline alerts when I find a better deal for ${request.routeFrom} to ${request.routeTo}?`
+        )
+      ]);
+    }
+
+    window.addEventListener("wayfinder:deal-alert-consent", handleDealAlertConsent);
+
+    return () => {
+      window.removeEventListener("wayfinder:deal-alert-consent", handleDealAlertConsent);
+    };
+  }, []);
+
+  function sendAgentMessage(message, displayContent = message) {
+    setMessages((current) => [...current, createChatMessage("user", displayContent)]);
+    setDraft("");
+    setIsProcessing(true);
+
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ message }));
+      return;
+    }
+
+    queuedAgentMessageRef.current = message;
+    setIsOpen(true);
+  }
+
+  function handleDealAlertChoice(enabled) {
+    if (!dealAlertRequest || isProcessing) {
+      return;
+    }
+
+    const request = dealAlertRequest;
+    setDealAlertRequest(null);
+    sendAgentMessage(
+      [
+        "Store offline better-deal alert consent for this flight booking.",
+        `bookingId: ${request.bookingId}`,
+        `username: ${request.username}`,
+        `routeFrom: ${request.routeFrom}`,
+        `routeTo: ${request.routeTo}`,
+        `enabled: ${enabled}`,
+      ].join("\n"),
+      enabled ? "Yes, send me better-deal alerts." : "No, do not send better-deal alerts."
+    );
+  }
+
   function handleSubmit(event) {
     event.preventDefault();
 
@@ -360,20 +440,7 @@ function ChatWidget() {
       return;
     }
 
-    setMessages((current) => [...current, createChatMessage("user", message)]);
-    setDraft("");
-    setIsProcessing(true);
-
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ message }));
-      return;
-    }
-
-    setMessages((current) => [
-      ...current,
-      createChatMessage("assistant", "The travel assistant is reconnecting. Try again in a moment.")
-    ]);
-    setIsProcessing(false);
+    sendAgentMessage(message);
   }
 
   return (
@@ -405,6 +472,16 @@ function ChatWidget() {
                 {message.content}
               </div>
             ))}
+            {dealAlertRequest && (
+              <div className="chat-choice-row" aria-label="Offline deal alert choices">
+                <button type="button" onClick={() => handleDealAlertChoice(true)}>
+                  Yes
+                </button>
+                <button type="button" onClick={() => handleDealAlertChoice(false)}>
+                  No
+                </button>
+              </div>
+            )}
             {isProcessing && (
               <div className="chat-message chat-message--assistant chat-message--typing">
                 Thinking...

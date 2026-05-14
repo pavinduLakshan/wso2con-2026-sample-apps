@@ -4,10 +4,8 @@ export function formatPrice(currency, amount) {
 
 function formatBookingReference(bookingId) {
   const source = String(bookingId || "").replace(/^booking-/i, "");
-  const letters = source.replace(/[^a-z]/gi, "").toUpperCase().padEnd(4, "WXYZ");
-  const numbers = source.replace(/\D/g, "").padEnd(6, "202600");
 
-  return `${letters.slice(0, 4)}-${numbers.slice(0, 6)}`;
+  return source.replace(/[^a-z0-9]/gi, "").toUpperCase().padEnd(6, "0").slice(0, 6);
 }
 
 export function getBookingReference(booking) {

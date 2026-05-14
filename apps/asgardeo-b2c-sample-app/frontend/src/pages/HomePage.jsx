@@ -166,26 +166,26 @@ const pageDetails = {
   flights: {
     heroHeading: "Find flights for wherever you are headed.",
     heroCopy:
-      "Compare flexible fares, departure times, and routes while keeping bookings connected to a secure account experience.",
+      "Compare fares, departure times, stops, and routes before turning the best option into a managed booking.",
     freshPicksHeading: "Flight ideas for your next window of free time.",
     whyTitle: "A cleaner path from route search to booking.",
     whyCopy:
-      "Keep the practical pieces close together: route ideas, dates, traveler counts, and authenticated bookings.",
+      "Keep route ideas, dates, traveler counts, booking details, and deal alerts in one focused travel flow.",
     highlights: [
       {
         icon: <Sparkles size={22} />,
-        title: "Flexible fares",
-        copy: "Compare routes, cabins, and timings from one calm workspace."
+        title: "Fare comparison",
+        copy: "Scan prices, cabins, stops, and airline timing without jumping between pages."
       },
       {
-        icon: <ShieldCheck size={22} />,
-        title: "Protected bookings",
-        copy: "Keep booked trips connected to secure Asgardeo sign-in."
+        icon: <Search size={22} />,
+        title: "Booking workspace",
+        copy: "View confirmed trips, payment details, wallet QR codes, and cancellation options."
       },
       {
         icon: <Clock3 size={22} />,
-        title: "Fast comparisons",
-        copy: "Filter practical options for routes, dates, and travelers."
+        title: "Better-deal alerts",
+        copy: "Let the assistant watch booked routes and ask before applying a lower fare."
       }
     ],
     deals: [
@@ -222,7 +222,7 @@ const pageDetails = {
     freshPicksHeading: "Stay ideas close to food, rail, and plans.",
     whyTitle: "A cleaner path from area search to reservation.",
     whyCopy:
-      "Keep destinations, dates, guest counts, and stay preferences in one focused search flow.",
+      "Keep destinations, dates, guest counts, nightly rates, and amenities in one focused search flow.",
     highlights: [
       {
         icon: <Hotel size={22} />,
@@ -231,13 +231,13 @@ const pageDetails = {
       },
       {
         icon: <Star size={22} />,
-        title: "Useful amenities",
-        copy: "Compare the details that matter for repeatable travel decisions."
+        title: "Amenity matching",
+        copy: "Compare breakfast, pool, workspace, shuttle, and location details at a glance."
       },
       {
         icon: <Clock3 size={22} />,
-        title: "Quick scanning",
-        copy: "Nightly rates and dates stay easy to compare."
+        title: "Clear rate signals",
+        copy: "Nightly prices, ratings, and dates stay easy to scan before reserving."
       }
     ],
     deals: [
@@ -279,17 +279,17 @@ const pageDetails = {
       {
         icon: <Sparkles size={22} />,
         title: "Curated ideas",
-        copy: "Compare ready-to-shape city plans before you commit."
+        copy: "Compare ready-to-shape city plans while the destination is still flexible."
       },
       {
         icon: <Star size={22} />,
         title: "Budget signals",
-        copy: "Estimated trip totals keep options grounded."
+        copy: "Estimated totals keep flight, hotel, and planning tradeoffs grounded."
       },
       {
         icon: <LifeBuoy size={22} />,
-        title: "Flexible planning",
-        copy: "Move from inspiration to search without switching tools."
+        title: "Assistant support",
+        copy: "Ask for travel help, booking details, and route-specific deal monitoring."
       }
     ],
     deals: [
@@ -334,36 +334,36 @@ export function HomePage({
 
   const faqs = [
     {
-      question: "How does Skyscanner work?",
-      answer: "We’re a flight, car hire and hotel search engine. We scan all the top airlines and travel providers across the net, so you can compare flight fares and other travel costs in one place. Once you’ve found the best flight, car hire or hotel, you book directly with the provider."
+      question: "How does Wayfinder work?",
+      answer: "Wayfinder helps you search sample flights, hotels, and trip ideas in one place. You can compare routes, prices, dates, and amenities, then sign in to create and manage bookings in the app."
     },
     {
-      question: "How can I find the cheapest flight using Skyscanner?",
-      answer: "Finding flights is easy here – over 100 million savvy travellers come to us each month to find cheap flight tickets, hotels and car hire. Here are a few simple tips on how to get the most out of your flight search. Save money and time. Whether it's the fastest flight or the smartest stay, you can pick your preferred flight provider or hotel based on real traveller ratings, and book instantly. Search Everywhere. Go anywhere. Fancy a trip but don’t mind where? Or perhaps you want to discover somewhere new. Search ‘Everywhere’ for the best budget airfare anywhere on any given day. Find the cheapest time to fly. If you have a destination in mind and want to find the cheapest flight, choose ‘Cheapest month’ when you search. Then find flights on the cheapest day."
+      question: "How can I find a better flight option?",
+      answer: "Start with your origin, destination, travel dates, and traveler count. Wayfinder shows matching flights with fares, timing, stops, cabin, and useful tags so you can choose the option that fits the trip."
     },
     {
-      question: "Where should I book a flight to right now?",
-      answer: "If you're looking for inspiration for your next trip, search Everywhere to find a cheap flight ticket anywhere."
+      question: "Can Wayfinder help when I do not know where to go?",
+      answer: "Yes. The Trips view shows destination ideas with estimated totals and planning context, so you can compare possible trips before choosing a flight or hotel."
     },
     {
-      question: "Do I book my flight with Skyscanner?",
-      answer: "We’re a search engine, so after you’ve found the best flight ticket you’ll book directly with the airline or travel provider on their site. This will give you the opportunity to add any loyalty information you would like and select your preferred flight options, such as seating."
+      question: "Can I book inside Wayfinder?",
+      answer: "Yes. After signing in, you can confirm sample flight, hotel, or trip bookings directly in the app and view them later from My Bookings."
     },
     {
-      question: "What happens after I have booked my flight?",
-      answer: "Your flight booking confirmation email and all the other info you'll need will come from the airline or provider you booked with. If you have any follow-up questions about your booking, or want to change or cancel your flight, you’d need to get in touch with them."
+      question: "What can I do after I book a flight?",
+      answer: "You can view the booking details, add the booking to a wallet using the displayed QR code, cancel the booking, and optionally let the AI assistant watch for better deals on the same route."
     },
     {
-      question: "Does Skyscanner do hotels too?",
-      answer: "Yes. You can use the same magic that powers flight search to find your perfect stay anywhere."
+      question: "Does Wayfinder support hotels too?",
+      answer: "Yes. You can search hotels by destination area and compare nightly rates, ratings, and amenities before reserving a stay."
     },
     {
-      question: "What about car hire?",
-      answer: "You can also use Skyscanner to search for and compare cheap car hire in seconds, then pick up your wheels from the airport as soon as you touch down."
+      question: "What can the AI assistant do?",
+      answer: "The assistant can answer travel questions, look up available options through the travel tools, store your better-deal alert preference, and help trigger a consent-based better-deal update."
     },
     {
-      question: "What’s a Price Alert?",
-      answer: "If you set up a Price Alert, we’ll watch the price of plane tickets for you, and let you know via email or push notification via the app if they rise or fall."
+      question: "What are better-deal alerts?",
+      answer: "After booking a flight, you can ask Wayfinder to watch for better deals on the same route. If a better deal is found, the assistant requests your consent before applying the update."
     }
   ];
 
@@ -450,38 +450,38 @@ export function HomePage({
         <div className="stay-list">
           <article className="stay-card">
             <div>
-              <h3>Secure account journey</h3>
-              <p>Sign in, sign up, and booking actions sit naturally in the flow.</p>
+              <h3>Managed bookings</h3>
+              <p>Review confirmed flights, wallet QR codes, fare details, and cancellation actions.</p>
             </div>
             <div className="stay-meta">
               <span>
-                <ShieldCheck size={18} />
+                <Plane size={18} />
               </span>
-              <strong>Asgardeo</strong>
+              <strong>Booked</strong>
             </div>
           </article>
           <article className="stay-card">
             <div>
-              <h3>Human-friendly choices</h3>
-              <p>Flights, hotels, and trip ideas are grouped for repeat comparison.</p>
+              <h3>Better-deal monitoring</h3>
+              <p>Opt in after booking and let the assistant watch the same route for lower fares.</p>
             </div>
             <div className="stay-meta">
               <span>
-                <Star size={18} />
+                <Clock3 size={18} />
               </span>
-              <strong>Curated</strong>
+              <strong>Alerts</strong>
             </div>
           </article>
           <article className="stay-card">
             <div>
-              <h3>Support-ready setup</h3>
-              <p>Fallback sample data keeps the front end useful while APIs connect.</p>
+              <h3>Trip planning surface</h3>
+              <p>Move between flights, hotels, and trip ideas without losing the search context.</p>
             </div>
             <div className="stay-meta">
               <span>
-                <LifeBuoy size={18} />
+                <Sparkles size={18} />
               </span>
-              <strong>Resilient</strong>
+              <strong>Ideas</strong>
             </div>
           </article>
         </div>

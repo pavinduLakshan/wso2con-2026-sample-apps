@@ -19,16 +19,35 @@ function ensureSchema(database) {
       type TEXT NOT NULL,
       item_id TEXT NOT NULL,
       travelers INTEGER NOT NULL,
+      booking_price REAL,
       status TEXT NOT NULL,
       created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS deal_alert_consents (
+      id TEXT PRIMARY KEY,
+      booking_id TEXT NOT NULL,
+      username TEXT NOT NULL,
+      route_from TEXT NOT NULL,
+      route_to TEXT NOT NULL,
+      enabled INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (booking_id, username),
+      FOREIGN KEY (booking_id) REFERENCES bookings(id)
     );
   `);
 
   const bookingColumns = database.prepare("PRAGMA table_info(bookings)").all();
   const hasBookingReference = bookingColumns.some((column) => column.name === "booking_reference");
+  const hasBookingPrice = bookingColumns.some((column) => column.name === "booking_price");
 
   if (!hasBookingReference) {
     database.exec("ALTER TABLE bookings ADD COLUMN booking_reference TEXT;");
+  }
+
+  if (!hasBookingPrice) {
+    database.exec("ALTER TABLE bookings ADD COLUMN booking_price REAL;");
   }
 
   const bookingsWithoutReference = database
@@ -41,13 +60,24 @@ function ensureSchema(database) {
 
   for (const booking of bookingsWithoutReference) {
     const source = String(booking.id || "").replace(/^booking-/i, "").replace(/[^a-z0-9]/gi, "");
-    const bookingReference = `WF-${source.toUpperCase().padEnd(8, "0").slice(0, 8)}`;
+    const bookingReference = source.toUpperCase().padEnd(6, "0").slice(0, 6);
 
     updateBookingReference.run({
       id: booking.id,
       bookingReference
     });
   }
+
+  database.exec(`
+    UPDATE bookings
+    SET booking_price = (
+      SELECT flights.price
+      FROM flights
+      WHERE flights.id = bookings.item_id
+    )
+    WHERE type = 'flight'
+      AND booking_price IS NULL;
+  `);
 }
 
 function getDatabase() {
@@ -225,6 +255,7 @@ export function createBookingRecord({
   createdAt
 }) {
   const username = user.username || user.email || user.id;
+  const item = type === "flight" ? findFlightById(itemId) : null;
 
   getDatabase()
     .prepare(
@@ -237,6 +268,7 @@ export function createBookingRecord({
           type,
           item_id,
           travelers,
+          booking_price,
           status,
           created_at
         ) VALUES (
@@ -247,6 +279,7 @@ export function createBookingRecord({
           @type,
           @itemId,
           @travelers,
+          @bookingPrice,
           @status,
           @createdAt
         )
@@ -260,6 +293,7 @@ export function createBookingRecord({
       type,
       itemId,
       travelers,
+      bookingPrice: item?.price ?? null,
       status,
       createdAt
     });
@@ -272,6 +306,7 @@ export function createBookingRecord({
     type,
     itemId,
     travelers,
+    bookingPrice: item?.price ?? null,
     status,
     createdAt
   };
@@ -287,6 +322,7 @@ export function findDuplicateBooking({ username, type, itemId }) {
           WHERE username = @username
             AND type = @type
             AND item_id = @itemId
+            AND status != 'canceled'
           LIMIT 1
         `
       )
@@ -302,6 +338,7 @@ export function findDuplicateBooking({ username, type, itemId }) {
         INNER JOIN flights requested_flight ON requested_flight.id = @itemId
         WHERE bookings.username = @username
           AND bookings.type = 'flight'
+          AND bookings.status != 'canceled'
           AND booked_flight.from_city = requested_flight.from_city
           AND booked_flight.to_city = requested_flight.to_city
           AND booked_flight.departure_time = requested_flight.departure_time
@@ -322,6 +359,7 @@ export function listBookedFlights(username) {
           bookings.booking_reference,
           bookings.username,
           bookings.travelers,
+          bookings.booking_price,
           bookings.status,
           bookings.created_at,
           flights.*
@@ -341,6 +379,251 @@ export function listBookedFlights(username) {
     travelers: row.travelers,
     status: row.status,
     createdAt: row.created_at,
-    flight: mapFlight(row)
+    flight: {
+      ...mapFlight(row),
+      price: row.booking_price ?? row.price
+    }
   }));
+}
+
+export function getBookedFlightById(bookingId) {
+  const row = getDatabase()
+    .prepare(
+      `
+        SELECT
+          bookings.id AS booking_id,
+          bookings.booking_reference,
+          bookings.username,
+          bookings.travelers,
+          bookings.booking_price,
+          bookings.status,
+          bookings.created_at,
+          flights.*
+        FROM bookings
+        INNER JOIN flights ON bookings.item_id = flights.id
+        WHERE bookings.type = 'flight'
+          AND bookings.id = @bookingId
+        LIMIT 1
+      `
+    )
+    .get({ bookingId });
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.booking_id,
+    bookingReference: row.booking_reference,
+    username: row.username,
+    travelers: row.travelers,
+    status: row.status,
+    createdAt: row.created_at,
+    flight: {
+      ...mapFlight(row),
+      price: row.booking_price ?? row.price
+    }
+  };
+}
+
+export function updateBookedFlightPrice({ bookingId, username, price }) {
+  const booking = getBookedFlightById(bookingId);
+
+  if (!booking) {
+    return null;
+  }
+
+  if (username && booking.username !== username) {
+    return null;
+  }
+
+  if (booking.status === "canceled") {
+    return null;
+  }
+
+  getDatabase()
+    .prepare(
+      `
+        UPDATE bookings
+        SET booking_price = @price
+        WHERE id = @bookingId
+          AND type = 'flight'
+      `
+    )
+    .run({ bookingId, price });
+
+  return getBookedFlightById(bookingId);
+}
+
+export function cancelBookedFlight({ bookingId, username }) {
+  const booking = getBookedFlightById(bookingId);
+
+  if (!booking) {
+    return null;
+  }
+
+  if (username && booking.username !== username) {
+    return null;
+  }
+
+  if (booking.status === "canceled") {
+    return booking;
+  }
+
+  const cancelBooking = getDatabase().transaction(() => {
+    getDatabase()
+      .prepare(
+        `
+          UPDATE bookings
+          SET status = 'canceled'
+          WHERE id = @bookingId
+            AND type = 'flight'
+        `
+      )
+      .run({ bookingId });
+
+    getDatabase()
+      .prepare(
+        `
+          UPDATE deal_alert_consents
+          SET enabled = 0,
+              updated_at = @updatedAt
+          WHERE booking_id = @bookingId
+        `
+      )
+      .run({
+        bookingId,
+        updatedAt: new Date().toISOString()
+      });
+  });
+
+  cancelBooking();
+
+  return getBookedFlightById(bookingId);
+}
+
+export function upsertDealAlertConsent({
+  id,
+  bookingId,
+  username,
+  routeFrom,
+  routeTo,
+  enabled,
+  now
+}) {
+  const existing = getDatabase()
+    .prepare(
+      `
+        SELECT id, created_at
+        FROM deal_alert_consents
+        WHERE booking_id = @bookingId
+          AND username = @username
+        LIMIT 1
+      `
+    )
+    .get({ bookingId, username });
+
+  const consentId = existing?.id || id;
+  const createdAt = existing?.created_at || now;
+
+  getDatabase()
+    .prepare(
+      `
+        INSERT INTO deal_alert_consents (
+          id,
+          booking_id,
+          username,
+          route_from,
+          route_to,
+          enabled,
+          created_at,
+          updated_at
+        ) VALUES (
+          @id,
+          @bookingId,
+          @username,
+          @routeFrom,
+          @routeTo,
+          @enabled,
+          @createdAt,
+          @updatedAt
+        )
+        ON CONFLICT(booking_id, username) DO UPDATE SET
+          route_from = excluded.route_from,
+          route_to = excluded.route_to,
+          enabled = excluded.enabled,
+          updated_at = excluded.updated_at
+      `
+    )
+    .run({
+      id: consentId,
+      bookingId,
+      username,
+      routeFrom,
+      routeTo,
+      enabled: enabled ? 1 : 0,
+      createdAt,
+      updatedAt: now
+    });
+
+  return getDealAlertConsent({ bookingId, username });
+}
+
+export function getDealAlertConsent({ bookingId, username }) {
+  const row = getDatabase()
+    .prepare(
+      `
+        SELECT *
+        FROM deal_alert_consents
+        WHERE booking_id = @bookingId
+          AND username = @username
+        LIMIT 1
+      `
+    )
+    .get({ bookingId, username });
+
+  return row ? mapDealAlertConsent(row) : null;
+}
+
+export function listEnabledDealAlertConsents(username) {
+  const rows = getDatabase()
+    .prepare(
+      `
+        SELECT
+          deal_alert_consents.*,
+          bookings.booking_reference,
+          bookings.booking_price,
+          flights.price AS flight_price,
+          flights.currency
+        FROM deal_alert_consents
+        INNER JOIN bookings ON deal_alert_consents.booking_id = bookings.id
+        INNER JOIN flights ON bookings.item_id = flights.id
+        WHERE deal_alert_consents.username = @username
+          AND deal_alert_consents.enabled = 1
+          AND bookings.type = 'flight'
+          AND bookings.status != 'canceled'
+        ORDER BY deal_alert_consents.updated_at DESC
+      `
+    )
+    .all({ username });
+
+  return rows.map((row) => ({
+    ...mapDealAlertConsent(row),
+    bookingReference: row.booking_reference,
+    currentPrice: row.booking_price ?? row.flight_price,
+    currency: row.currency
+  }));
+}
+
+function mapDealAlertConsent(row) {
+  return {
+    id: row.id,
+    bookingId: row.booking_id,
+    username: row.username,
+    routeFrom: row.route_from,
+    routeTo: row.route_to,
+    enabled: Boolean(row.enabled),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
 }

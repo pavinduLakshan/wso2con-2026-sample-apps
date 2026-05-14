@@ -13,6 +13,8 @@ The AI agent connects to this server over Streamable HTTP at `/mcp`. The MCP ser
 - `create_booking`: Calls `POST /api/bookings`.
 - `get_flight_bookings`: Calls `GET /api/bookings/flights`.
 - `get_profile`: Calls `GET /api/me`.
+- `store_deal_alert_consent`: Calls `POST /api/deal-alert-consents`.
+- `invoke_ciba_better_deal`: Starts an Asgardeo CIBA flow, waits for consent, then calls `PATCH /api/bookings/:bookingId/price`.
 
 ## Local Configuration
 
@@ -54,3 +56,5 @@ http://localhost:8000/health
 ## Authorization
 
 If a client sends an `Authorization` header to the MCP endpoint, the MCP server forwards that header to the REST API. This allows protected API endpoints to receive the same bearer token provided by the AI agent.
+
+The CIBA better-deal tool requires `ASGARDEO_BASE_URL`, `CIBA_CLIENT_ID`, and `CIBA_CLIENT_SECRET`. It sends the backchannel request to `/oauth2/ciba`, polls `/oauth2/token` with `grant_type=urn:openid:params:grant-type:ciba`, and uses the user-approved access token to update the booking price.

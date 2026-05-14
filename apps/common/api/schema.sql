@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS deal_alert_consents;
 DROP TABLE IF EXISTS bookings;
 DROP TABLE IF EXISTS trips;
 DROP TABLE IF EXISTS hotels;
@@ -50,6 +51,20 @@ CREATE TABLE bookings (
   type TEXT NOT NULL,
   item_id TEXT NOT NULL,
   travelers INTEGER NOT NULL,
+  booking_price REAL,
   status TEXT NOT NULL,
   created_at TEXT NOT NULL
+);
+
+CREATE TABLE deal_alert_consents (
+  id TEXT PRIMARY KEY,
+  booking_id TEXT NOT NULL,
+  username TEXT NOT NULL,
+  route_from TEXT NOT NULL,
+  route_to TEXT NOT NULL,
+  enabled INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (booking_id, username),
+  FOREIGN KEY (booking_id) REFERENCES bookings(id)
 );

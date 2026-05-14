@@ -13,6 +13,7 @@ tags:
   - name: Trips
   - name: Locations
   - name: Bookings
+  - name: Deal Alerts
   - name: User
 paths:
   /health:
@@ -227,6 +228,179 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/bookings/flights/{bookingId}:
+    get:
+      tags:
+        - Bookings
+      summary: Get a booked flight by booking ID
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Booked flight
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BookedFlight"
+        "404":
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/bookings/{bookingId}/price:
+    patch:
+      tags:
+        - Bookings
+      summary: Update a booked flight price
+      description: Used after CIBA consent to apply a better deal to a booked flight.
+      security:
+        - AsgardeoBearerAuth: []
+        - {}
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBookingPriceRequest"
+      responses:
+        "200":
+          description: Updated booked flight
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BookedFlight"
+        "400":
+          description: Invalid price request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/bookings/{bookingId}/cancel:
+    patch:
+      tags:
+        - Bookings
+      summary: Cancel a booked flight
+      description: Updates the booking status to canceled and disables better-deal alerts for the booking.
+      security:
+        - AsgardeoBearerAuth: []
+        - {}
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Canceled booked flight
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BookedFlight"
+        "401":
+          description: Missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/deal-alert-consents:
+    post:
+      tags:
+        - Deal Alerts
+      summary: Store better-deal alert consent for a booked flight
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealAlertConsentRequest"
+      responses:
+        "200":
+          description: Stored consent
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DealAlertConsent"
+        "404":
+          description: Booking not found for username
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/deal-alert-consents/{username}:
+    get:
+      tags:
+        - Deal Alerts
+      summary: List enabled better-deal alert consents for a username
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Enabled consents
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DealAlertConsent"
   /api/me:
     get:
       tags:
@@ -416,6 +590,42 @@ components:
           minimum: 1
           default: 1
           example: 2
+    UpdateBookingPriceRequest:
+      type: object
+      required:
+        - price
+      properties:
+        username:
+          type: string
+          example: local.traveler
+        price:
+          type: number
+          minimum: 0
+          example: 266.9
+    DealAlertConsentRequest:
+      type: object
+      required:
+        - bookingId
+        - username
+        - routeFrom
+        - routeTo
+        - enabled
+      properties:
+        bookingId:
+          type: string
+          example: booking-2cd80f0a-17b8-4d2f-a436-44595fa0aa44
+        username:
+          type: string
+          example: local.traveler
+        routeFrom:
+          type: string
+          example: Colombo
+        routeTo:
+          type: string
+          example: Singapore
+        enabled:
+          type: boolean
+          example: true
     Location:
       type: object
       required:
@@ -458,6 +668,10 @@ components:
         travelers:
           type: integer
           example: 2
+        bookingPrice:
+          type: number
+          nullable: true
+          example: 314
         status:
           type: string
           example: confirmed
@@ -491,6 +705,48 @@ components:
           format: date-time
         flight:
           $ref: "#/components/schemas/Flight"
+    DealAlertConsent:
+      type: object
+      required:
+        - id
+        - bookingId
+        - username
+        - routeFrom
+        - routeTo
+        - enabled
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          example: deal-alert-consent-b06071c1-9cc5-4742-a7f5-2e4c2c5a51f7
+        bookingId:
+          type: string
+          example: booking-2cd80f0a-17b8-4d2f-a436-44595fa0aa44
+        username:
+          type: string
+          example: local.traveler
+        routeFrom:
+          type: string
+          example: Colombo
+        routeTo:
+          type: string
+          example: Singapore
+        enabled:
+          type: boolean
+          example: true
+        currentPrice:
+          type: number
+          example: 314
+        currency:
+          type: string
+          example: USD
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     User:
       type: object
       required:

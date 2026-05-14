@@ -95,9 +95,63 @@ function validateClaims(payload) {
   }
 }
 
-export async function getAuthenticatedUser(request) {
+function mapClaimsToUser(payload) {
+  return {
+    id: payload.sub,
+    username:
+      payload.username ||
+      payload.preferred_username ||
+      payload.userName ||
+      payload.email,
+    email: payload.email,
+    givenName: payload.given_name,
+    familyName: payload.family_name,
+    rawClaims: payload
+  };
+}
+
+function getBearerToken(request) {
   const authHeader = request.headers.authorization || "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+  return authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+}
+
+function getLocalDemoUser() {
+  return {
+    id: "local-demo-user",
+    username: "local.traveler",
+    email: "local.traveler@example.com",
+    givenName: "Local",
+    familyName: "Traveler"
+  };
+}
+
+function getHeaderValue(request, name) {
+  const value = request.headers[name.toLowerCase()];
+
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function getDemoHeaderUser(request) {
+  const username = getHeaderValue(request, "x-wayfinder-username");
+  const userId = getHeaderValue(request, "x-wayfinder-user-id");
+  const email = getHeaderValue(request, "x-wayfinder-email");
+
+  if (!username && !userId && !email) {
+    return null;
+  }
+
+  return {
+    id: userId || username || email,
+    username: username || email || userId,
+    email,
+    givenName: undefined,
+    familyName: undefined
+  };
+}
+
+export async function getAuthenticatedUser(request) {
+  const token = getBearerToken(request);
 
   if (!token) {
     throw new Error("Missing bearer token");
@@ -122,25 +176,32 @@ export async function getAuthenticatedUser(request) {
 
   validateClaims(parsedToken.payload);
 
-  return {
-    id: parsedToken.payload.sub,
-    username: parsedToken.payload.username || parsedToken.payload.preferred_username,
-    email: parsedToken.payload.email,
-    givenName: parsedToken.payload.given_name,
-    familyName: parsedToken.payload.family_name,
-    rawClaims: parsedToken.payload
-  };
+  return mapClaimsToUser(parsedToken.payload);
 }
 
 export async function resolveUser(request) {
   if (process.env.API_REQUIRE_AUTH !== "true") {
-    return {
-      id: "local-demo-user",
-      username: "local.traveler",
-      email: "local.traveler@example.com",
-      givenName: "Local",
-      familyName: "Traveler"
-    };
+    const headerUser = getDemoHeaderUser(request);
+
+    if (headerUser) {
+      return headerUser;
+    }
+
+    const token = getBearerToken(request);
+
+    if (token) {
+      try {
+        const parsedToken = parseJwt(token);
+
+        if (parsedToken.payload?.sub) {
+          return mapClaimsToUser(parsedToken.payload);
+        }
+      } catch {
+        // Keep local demos usable when requests do not include an Asgardeo JWT.
+      }
+    }
+
+    return getLocalDemoUser();
   }
 
   return getAuthenticatedUser(request);

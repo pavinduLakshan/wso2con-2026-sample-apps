@@ -15,13 +15,51 @@ limitations under the License.
 */
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function loadEnvFile(filePath: string) {
+    if (!existsSync(filePath)) {
+        return;
+    }
+
+    const lines = readFileSync(filePath, "utf8").split(/\r?\n/);
+
+    for (const line of lines) {
+        const trimmedLine = line.trim();
+
+        if (!trimmedLine || trimmedLine.startsWith("#")) {
+            continue;
+        }
+
+        const separatorIndex = trimmedLine.indexOf("=");
+
+        if (separatorIndex <= 0) {
+            continue;
+        }
+
+        const key = trimmedLine.slice(0, separatorIndex).trim();
+        const rawValue = trimmedLine.slice(separatorIndex + 1).trim();
+        const value = rawValue.replace(/^\s*["']|["']\s*$/g, "");
+
+        if (key && process.env[key] === undefined) {
+            process.env[key] = value;
+        }
+    }
+}
+
+loadEnvFile(resolve(__dirname, ".env"));
+
 const apiBaseUrl = process.env.API_BASE_URL || "http://localhost:8787";
 const port = Number(process.env.PORT || process.env.MCP_PORT || 8000);
 const host = process.env.HOST || "localhost";
+const cibaGrantType = "urn:openid:params:grant-type:ciba";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
@@ -68,6 +106,15 @@ function createApiClient(authorization?: string) {
             method: "POST",
             body: JSON.stringify(body),
         }),
+        patch: (path: string, body: JsonValue, bearerToken?: string) => {
+            const headers = bearerToken ? { Authorization: `Bearer ${bearerToken}` } : undefined;
+
+            return requestApi(path, {
+                method: "PATCH",
+                headers,
+                body: JSON.stringify(body),
+            });
+        },
     };
 }
 
@@ -80,6 +127,128 @@ function toToolContent(data: JsonValue) {
             },
         ],
     };
+}
+
+function getRequiredEnv(name: string) {
+    const value = process.env[name]?.trim();
+
+    if (!value) {
+        throw new Error(`${name} is required for the CIBA better-deal tool. Add ASGARDEO_BASE_URL, CIBA_CLIENT_ID, and CIBA_CLIENT_SECRET to apps/common/mcp/.env, then restart the MCP server.`);
+    }
+
+    return value;
+}
+
+function getBearerToken(authorization?: string) {
+    if (!authorization?.startsWith("Bearer ")) {
+        return "";
+    }
+
+    return authorization.slice("Bearer ".length).trim();
+}
+
+function buildCibaAuthorizationHeader() {
+    const clientId = getRequiredEnv("CIBA_CLIENT_ID");
+    const clientSecret = getRequiredEnv("CIBA_CLIENT_SECRET");
+    const encodedCredentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+
+    return `Basic ${encodedCredentials}`;
+}
+
+async function postAsgardeoForm(path: string, body: URLSearchParams) {
+    const baseUrl = getRequiredEnv("ASGARDEO_BASE_URL").replace(/\/$/, "");
+    const response = await fetch(`${baseUrl}${path}`, {
+        method: "POST",
+        headers: {
+            Authorization: buildCibaAuthorizationHeader(),
+            "Content-Type": "application/x-www-form-urlencoded",
+            Accept: "application/json",
+        },
+        body: body.toString(),
+    });
+    const data = await response.json().catch(() => ({})) as Record<string, unknown>;
+
+    if (!response.ok) {
+        const message = data.error_description || data.error || `Asgardeo request failed with ${response.status}`;
+
+        throw new Error(String(message));
+    }
+
+    return data;
+}
+
+function delay(milliseconds: number) {
+    return new Promise((resolve) => {
+        setTimeout(resolve, milliseconds);
+    });
+}
+
+async function invokeCiba({
+    authorization,
+    bindingMessage,
+    loginHint,
+}: {
+    authorization?: string;
+    bindingMessage: string;
+    loginHint: string;
+}) {
+    const scope = process.env.CIBA_SCOPE?.trim() || "openid profile";
+    const cibaBody = new URLSearchParams({
+        scope,
+        login_hint: loginHint,
+        binding_message: bindingMessage,
+    });
+    const actorToken = getBearerToken(authorization);
+
+    if (actorToken && process.env.CIBA_INCLUDE_ACTOR_TOKEN === "true") {
+        cibaBody.set("actor_token", actorToken);
+    }
+
+    const cibaResponse = await postAsgardeoForm("/oauth2/ciba", cibaBody);
+    const authReqId = typeof cibaResponse.auth_req_id === "string" ? cibaResponse.auth_req_id : "";
+
+    if (!authReqId) {
+        throw new Error("Asgardeo CIBA response did not include auth_req_id.");
+    }
+
+    const intervalSeconds = Number(cibaResponse.interval || process.env.CIBA_POLL_INTERVAL_SECONDS || 3);
+    const expiresInSeconds = Number(cibaResponse.expires_in || 120);
+    const timeoutMs = Number(process.env.CIBA_POLL_TIMEOUT_MS || expiresInSeconds * 1000);
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+        await delay(Math.max(intervalSeconds, 1) * 1000);
+
+        const tokenBody = new URLSearchParams({
+            grant_type: cibaGrantType,
+            auth_req_id: authReqId,
+        });
+
+        try {
+            const tokenResponse = await postAsgardeoForm("/oauth2/token", tokenBody);
+            const accessToken = typeof tokenResponse.access_token === "string" ? tokenResponse.access_token : "";
+
+            if (!accessToken) {
+                throw new Error("Asgardeo token response did not include access_token.");
+            }
+
+            return {
+                accessToken,
+                authReqId,
+                authUrl: typeof cibaResponse.auth_url === "string" ? cibaResponse.auth_url : undefined,
+            };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+
+            if (message.includes("authorization_pending") || message.includes("slow_down")) {
+                continue;
+            }
+
+            throw error;
+        }
+    }
+
+    throw new Error("Timed out waiting for the user to approve the CIBA request.");
 }
 
 function createTravelMcpServer(authorization?: string) {
@@ -179,6 +348,87 @@ function createTravelMcpServer(authorization?: string) {
         "Get the current authenticated user's profile from the travel API.",
         {},
         async () => toToolContent(await api.get("/api/me")),
+    );
+
+    server.tool(
+        "store_deal_alert_consent",
+        "Store whether a user consented to offline better-deal alerts for a flight booking.",
+        {
+            bookingId: z.string().describe("The confirmed flight booking ID."),
+            username: z.string().describe("The username on the booking."),
+            routeFrom: z.string().describe("Flight origin city."),
+            routeTo: z.string().describe("Flight destination city."),
+            enabled: z.boolean().describe("true when the user agrees to alerts, false when they decline."),
+        },
+        async ({ bookingId, username, routeFrom, routeTo, enabled }) => toToolContent(await api.post(
+            "/api/deal-alert-consents",
+            {
+                bookingId,
+                username,
+                routeFrom,
+                routeTo,
+                enabled,
+            },
+        )),
+    );
+
+    server.tool(
+        "invoke_ciba_better_deal",
+        "For test input DEAL <username>, initiate Asgardeo CIBA consent and reduce a consented flight booking price.",
+        {
+            username: z.string().describe("The username that should receive the CIBA authorization request."),
+            bookingId: z.string().optional().describe("Optional booking ID. If omitted, the newest enabled consent is used."),
+            discountPercent: z.number().min(1).max(90).optional().describe("Optional discount percent. Defaults to 15."),
+        },
+        async ({ username, bookingId, discountPercent }) => {
+            const consents = await api.get(`/api/deal-alert-consents/${encodeURIComponent(username)}`);
+            const consentList = (
+                typeof consents === "object" &&
+                consents !== null &&
+                !Array.isArray(consents) &&
+                Array.isArray(consents.data)
+            ) ? consents.data as Array<Record<string, JsonValue>> : [];
+            const selectedConsent = bookingId
+                ? consentList.find((consent) => consent.bookingId === bookingId)
+                : consentList[0];
+
+            if (!selectedConsent) {
+                throw new Error(`No enabled better-deal alert consent found for ${username}.`);
+            }
+
+            const currentPrice = Number(selectedConsent.currentPrice);
+            const percent = discountPercent ?? 15;
+            const newPrice = Number((currentPrice * (1 - percent / 100)).toFixed(2));
+            const routeFrom = String(selectedConsent.routeFrom || "");
+            const routeTo = String(selectedConsent.routeTo || "");
+            const selectedBookingId = String(selectedConsent.bookingId || "");
+            const ciba = await invokeCiba({
+                authorization,
+                loginHint: username,
+                bindingMessage: `Approve a ${percent}% better-deal price update for your ${routeFrom} to ${routeTo} booking.`,
+            });
+            const updatedBooking = await api.patch(
+                `/api/bookings/${encodeURIComponent(selectedBookingId)}/price`,
+                {
+                    username,
+                    price: newPrice,
+                },
+                ciba.accessToken,
+            );
+
+            return toToolContent({
+                data: {
+                    booking: updatedBooking,
+                    ciba: {
+                        authReqId: ciba.authReqId,
+                        authUrl: ciba.authUrl || null,
+                    },
+                    previousPrice: currentPrice,
+                    newPrice,
+                    discountPercent: percent,
+                },
+            });
+        },
     );
 
     return server;

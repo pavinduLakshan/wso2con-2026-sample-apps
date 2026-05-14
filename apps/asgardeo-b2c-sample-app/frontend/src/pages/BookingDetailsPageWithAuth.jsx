@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useAsgardeo } from "@asgardeo/react";
 import { Link } from "react-router-dom";
-import { ChevronLeft, Plane, ShieldCheck } from "lucide-react";
-import { getBookedFlights } from "../api";
+import { Ban, ChevronLeft, Plane, ShieldCheck } from "lucide-react";
+import { cancelBooking, getBookedFlights } from "../api";
 import { formatPrice, getBookingReference } from "../utils/bookings";
 
 const walletCredentialOffer = import.meta.env.VITE_WALLET_CREDENTIAL_OFFER || "";
@@ -11,9 +11,12 @@ export function BookingDetailsPageWithAuth({ bookingId }) {
   const { getAccessToken, isSignedIn, signIn, user } = useAsgardeo();
   const [booking, setBooking] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
   const [error, setError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
   const userKey = user?.sub || user?.username || user?.userName || user?.email || "signed-in";
   const getAccessTokenRef = useRef(getAccessToken);
+  const isCanceled = booking?.status === "canceled";
 
   useEffect(() => {
     getAccessTokenRef.current = getAccessToken;
@@ -29,10 +32,11 @@ export function BookingDetailsPageWithAuth({ bookingId }) {
 
       setIsLoading(true);
       setError("");
+      setStatusMessage("");
 
       try {
         const accessToken = getAccessTokenRef.current ? await getAccessTokenRef.current() : null;
-        const bookings = await getBookedFlights(accessToken);
+        const bookings = await getBookedFlights(accessToken, user);
         const selectedBooking = bookings.find((item) => String(item.id) === String(bookingId));
 
         if (isCurrent) {
@@ -56,6 +60,34 @@ export function BookingDetailsPageWithAuth({ bookingId }) {
       isCurrent = false;
     };
   }, [bookingId, isSignedIn, userKey]);
+
+  async function handleCancelBooking() {
+    if (!booking || isCanceling || isCanceled) {
+      return;
+    }
+
+    const shouldCancel = window.confirm(`Cancel booking ${getBookingReference(booking)}?`);
+
+    if (!shouldCancel) {
+      return;
+    }
+
+    setIsCanceling(true);
+    setError("");
+    setStatusMessage("");
+
+    try {
+      const accessToken = getAccessTokenRef.current ? await getAccessTokenRef.current() : null;
+      const updatedBooking = await cancelBooking(booking.id, accessToken, user);
+
+      setBooking(updatedBooking);
+      setStatusMessage("Booking canceled.");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setIsCanceling(false);
+    }
+  }
 
   if (!isSignedIn) {
     return (
@@ -93,6 +125,12 @@ export function BookingDetailsPageWithAuth({ bookingId }) {
         </div>
       )}
 
+      {statusMessage && (
+        <div className="api-status api-status--success" role="status">
+          {statusMessage}
+        </div>
+      )}
+
       {isLoading && <p className="empty-state management-message">Loading booking details...</p>}
 
       {!isLoading && booking && (
@@ -100,7 +138,9 @@ export function BookingDetailsPageWithAuth({ bookingId }) {
           <div className="booking-flight-widget">
             <div className="booking-flight-main">
               <div className="booking-detail-topline">
-                <span className="booking-status">{booking.status}</span>
+                <span className={`booking-status ${isCanceled ? "booking-status--canceled" : ""}`}>
+                  {booking.status}
+                </span>
                 <strong>{booking.flight.airline}</strong>
               </div>
               <div className="itinerary-route">
@@ -186,21 +226,44 @@ export function BookingDetailsPageWithAuth({ bookingId }) {
             </section>
           </div>
 
-          <section className="travel-insurance-section" aria-label="Travel insurance offer">
-            <div className="travel-insurance-icon" aria-hidden="true">
-              <ShieldCheck size={26} />
-            </div>
-            <div>
-              <span>Travel protection</span>
-              <h2>Add travel insurance before you fly.</h2>
-              <p>
-                Cover unexpected delays, medical emergencies, and baggage issues for this trip.
-              </p>
-            </div>
-            <button className="travel-insurance-button" type="button">
-              Buy insurance
-            </button>
-          </section>
+          {!isCanceled && (
+            <section className="booking-action-section" aria-label="Booking actions">
+              <div className="booking-action-icon" aria-hidden="true">
+                <Ban size={24} />
+              </div>
+              <div>
+                <span>Booking actions</span>
+                <h2>Cancel this booking.</h2>
+                <p>Canceling updates the booking status and turns off better-deal alerts for this trip.</p>
+              </div>
+              <button
+                className="booking-cancel-button"
+                type="button"
+                disabled={isCanceling}
+                onClick={handleCancelBooking}
+              >
+                {isCanceling ? "Canceling..." : "Cancel booking"}
+              </button>
+            </section>
+          )}
+
+          {!isCanceled && (
+            <section className="travel-insurance-section" aria-label="Travel insurance offer">
+              <div className="travel-insurance-icon" aria-hidden="true">
+                <ShieldCheck size={26} />
+              </div>
+              <div>
+                <span>Travel protection</span>
+                <h2>Add travel insurance before you fly.</h2>
+                <p>
+                  Cover unexpected delays, medical emergencies, and baggage issues for this trip.
+                </p>
+              </div>
+              <button className="travel-insurance-button" type="button">
+                Buy insurance
+              </button>
+            </section>
+          )}
         </section>
       )}
     </main>

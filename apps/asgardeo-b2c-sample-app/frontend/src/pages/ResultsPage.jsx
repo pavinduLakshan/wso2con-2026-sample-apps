@@ -136,7 +136,7 @@ function ResultCard({ bookingState, category, isFavorite, item, onBook, onSelect
   );
 }
 
-export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations, onSearch }) {
+export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations, onSearch, user }) {
   const navigate = useNavigate();
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -210,7 +210,7 @@ export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations,
           if (criteria.category === "flights" && getAccessToken) {
             try {
               const accessToken = await getAccessToken();
-              const bookedFlights = await getBookedFlights(accessToken);
+              const bookedFlights = await getBookedFlights(accessToken, user);
               const nextBookingStates = {};
 
               for (const result of data) {
@@ -259,7 +259,7 @@ export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations,
         type,
         itemId,
         travelers: Number.parseInt(criteria.travelers, 10) || 1
-      }, accessToken);
+      }, accessToken, user);
 
       setBookingStates((current) => ({
         ...current,
@@ -311,24 +311,23 @@ export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations,
     navigate(buildFlightDetailsPath(itemId, criteria));
   }
 
-  const title =
+  const searchSummary =
     criteria.category === "hotels"
-      ? `Hotels in ${criteria.to || "your destination"}`
-      : criteria.category === "trips"
-        ? `Trips to ${criteria.to || "your destination"}`
-        : `${criteria.from || "Anywhere"} to ${criteria.to || "anywhere"}`;
+      ? `Showing search results for hotels in ${criteria.to || "your destination"}`
+      : `Showing search results for ${criteria.from || "Anywhere"} to ${criteria.to || "anywhere"}`;
 
   return (
     <main>
       <section className="results-hero">
         <div>
           <p className="eyebrow">Search results</p>
-          <h1>{title}</h1>
-          <p>
+          <p className="results-search-summary">{searchSummary}</p>
+          <p className="results-search-meta">
             {criteria.dates || "Flexible dates"} · {criteria.travelers || "Any travelers"}
           </p>
         </div>
         <SearchPanel
+          compact
           initialCriteria={criteria}
           key={`${criteria.category}-${criteria.from}-${criteria.to}-${criteria.dates}-${criteria.travelers}`}
           locations={locations}
@@ -366,7 +365,7 @@ export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations,
 }
 
 export function ResultsPageWithAuth(props) {
-  const { getAccessToken } = useAsgardeo();
+  const { getAccessToken, user } = useAsgardeo();
 
-  return <ResultsPage {...props} getAccessToken={getAccessToken} />;
+  return <ResultsPage {...props} getAccessToken={getAccessToken} user={user} />;
 }

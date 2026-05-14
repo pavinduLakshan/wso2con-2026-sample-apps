@@ -15,6 +15,7 @@ export function PaymentPageWithAuth({ criteria, flightId }) {
   const [isCvcVisible, setIsCvcVisible] = useState(false);
   const [error, setError] = useState("");
   const userKey = user?.sub || user?.username || user?.userName || user?.email || "signed-in";
+  const username = user?.username || user?.userName || user?.email || user?.sub || "";
   const getAccessTokenRef = useRef(getAccessToken);
 
   useEffect(() => {
@@ -65,15 +66,28 @@ export function PaymentPageWithAuth({ criteria, flightId }) {
       const booking = await createBooking({
         type: "flight",
         itemId: flight.id,
-        travelers: Number.parseInt(criteria.travelers, 10) || 1
-      }, accessToken);
+        travelers: Number.parseInt(criteria.travelers, 10) || 1,
+        user: {
+          id: user?.sub,
+          username,
+          email: user?.email || user?.mail
+        }
+      }, accessToken, user);
 
+      window.dispatchEvent(new CustomEvent("wayfinder:deal-alert-consent", {
+        detail: {
+          bookingId: booking.id,
+          username: username || booking.username,
+          routeFrom: flight.from,
+          routeTo: flight.to
+        }
+      }));
       navigate(`/bookings/${encodeURIComponent(booking.id)}`);
     } catch (requestError) {
       try {
         if (requestError.message.includes("already exists")) {
           const accessToken = getAccessTokenRef.current ? await getAccessTokenRef.current() : null;
-          const bookings = await getBookedFlights(accessToken);
+          const bookings = await getBookedFlights(accessToken, user);
           const existingBooking = bookings.find((booking) => isSameFlight(flight, booking.flight));
 
           if (existingBooking) {

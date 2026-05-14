@@ -29,7 +29,7 @@ export function BookingsPageWithAuth() {
 
       try {
         const accessToken = getAccessTokenRef.current ? await getAccessTokenRef.current() : null;
-        const data = await getBookedFlights(accessToken);
+        const data = await getBookedFlights(accessToken, user);
 
         if (isCurrent) {
           setBookings(data);
@@ -110,7 +110,9 @@ export function BookingsPageWithAuth() {
           bookings.map((booking) => (
             <Link className="booking-row" to={`/bookings/${booking.id}`} key={booking.id}>
               <div className="booking-route">
-                <span className="booking-status">{booking.status}</span>
+                <span className={`booking-status ${booking.status === "canceled" ? "booking-status--canceled" : ""}`}>
+                  {booking.status}
+                </span>
                 <strong>{booking.flight.from} to {booking.flight.to}</strong>
                 <small>Booked {new Date(booking.createdAt).toLocaleDateString()}</small>
               </div>
