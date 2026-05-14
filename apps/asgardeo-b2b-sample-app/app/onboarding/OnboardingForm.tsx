@@ -192,15 +192,6 @@ export default function OnboardingForm() {
         />
       </label>
       <label>
-        <span>Organization name<span className="required-mark">*</span></span>
-        <input
-          autoComplete="organization"
-          className={errors.organizationName ? "input--error" : ""}
-          onChange={(event) => updateField("organizationName", event.target.value)}
-          value={form.organizationName}
-        />
-      </label>
-      <label>
         <span>Password<span className="required-mark">*</span></span>
         <div className="password-field">
           <input
@@ -229,6 +220,15 @@ export default function OnboardingForm() {
             )}
           </button>
         </div>
+      </label>
+      <label>
+        <span>Organization name<span className="required-mark">*</span></span>
+        <input
+          autoComplete="organization"
+          className={errors.organizationName ? "input--error" : ""}
+          onChange={(event) => updateField("organizationName", event.target.value)}
+          value={form.organizationName}
+        />
       </label>
       <button className="button button-primary" type="submit">
         Create organization

@@ -1848,7 +1848,6 @@ strong {
 }
 
 .plan-card--featured {
-  border-color: var(--primary);
   box-shadow: 0 12px 40px rgba(37, 99, 235, 0.13);
   transform: translateY(-6px);
 }
