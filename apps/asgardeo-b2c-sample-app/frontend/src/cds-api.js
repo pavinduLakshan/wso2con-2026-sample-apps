@@ -1,84 +1,38 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8787";
-export const ASGARDEO_BASE_URL = import.meta.env.VITE_ASGARDEO_BASE_URL || "";
 export const ASGARDEO_CLIENT_ID = import.meta.env.VITE_ASGARDEO_CLIENT_ID || "";
 
-const CDS_PROFILE_ID_COOKIE = "cds_profile_id";
-const COOKIE_MAX_AGE = 30 * 24 * 60 * 60;
+const CDS_PROFILE_ID_STORAGE_KEY = "cds_profile_id";
+const CDS_ANON_TRACKER_STORAGE_KEY = "cds_anonymous_profile_tracker";
 
 let cdsProfileCreatePromise = null;
 let cdsProfileId = null;
+let cdsAnonymousProfileTracker = null;
 
-function setCookie(name, value, maxAge = COOKIE_MAX_AGE) {
-  let cookieStr = `${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
-
-  if (maxAge) {
-    cookieStr += `; Max-Age=${maxAge}`;
+function getStorageValue(key) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
   }
-
-  cookieStr += "; Path=/";
-
-  if (window.location.protocol === "https:") {
-    cookieStr += "; Secure";
-  }
-
-  cookieStr += "; SameSite=Strict";
-  document.cookie = cookieStr;
 }
 
-function getCookie(name) {
-  const cookies = document.cookie.split(";");
-
-  for (const cookie of cookies) {
-    const [key, ...valueParts] = cookie.split("=");
-
-    if (!key) {
-      continue;
-    }
-
-    if (decodeURIComponent(key.trim()) === name) {
-      return decodeURIComponent(valueParts.join("=").trim());
-    }
-  }
-
-  return null;
-}
-
-function deleteCookie(name) {
-  setCookie(name, "", 0);
-}
-
-function setAsgardeoDomainCDSProfileCookie(cdsProfileValue) {
-  if (!cdsProfileValue) {
+function setStorageValue(key, value) {
+  if (!value) {
     return;
   }
 
   try {
-    const currentHost = window.location.hostname;
-    const asgardeoHost = "asgardeo.io";
-    const encodedValue = encodeURIComponent(cdsProfileValue);
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage write errors and continue with in-memory values.
+  }
+}
 
-    if (asgardeoHost && (currentHost === asgardeoHost || currentHost.endsWith(`.${asgardeoHost}`))) {
-      document.cookie = [
-        `cds_profile=${encodedValue}`,
-        `Domain=${asgardeoHost}`,
-        "Path=/",
-        "Secure",
-        "SameSite=None"
-      ].join("; ");
-      return;
-    }
-
-    document.cookie = [
-      `cds_profile=${encodedValue}`,
-      "Path=/",
-      `Domain=${asgardeoHost}`,
-      window.location.protocol === "https:" ? "Secure" : "",
-      "SameSite=None"
-    ]
-      .filter(Boolean)
-      .join("; ");
-  } catch (error) {
-    console.warn("Failed to set cds_profile cookie for Asgardeo domain:", error.message);
+function removeStorageValue(key) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Ignore storage removal errors.
   }
 }
 
@@ -109,27 +63,37 @@ export async function createCDSProfile(profilePayload = {}) {
 
 export async function ensureCDSProfile(profilePayload = {}) {
   if (cdsProfileId) {
-    return { profile_id: cdsProfileId };
+    return {
+      profile_id: cdsProfileId,
+      anonymous_profile_tracker: cdsAnonymousProfileTracker
+    };
   }
 
-  const cookieProfileId = getCookie(CDS_PROFILE_ID_COOKIE);
+  const storedProfileId = getStorageValue(CDS_PROFILE_ID_STORAGE_KEY);
+  const storedAnonymousProfileTracker = getStorageValue(CDS_ANON_TRACKER_STORAGE_KEY);
 
-  if (cookieProfileId) {
-    cdsProfileId = cookieProfileId;
-    return { profile_id: cookieProfileId };
+  if (storedProfileId) {
+    cdsProfileId = storedProfileId;
+    cdsAnonymousProfileTracker = storedAnonymousProfileTracker || null;
+
+    return {
+      profile_id: storedProfileId,
+      anonymous_profile_tracker: cdsAnonymousProfileTracker
+    };
   }
 
   if (!cdsProfileCreatePromise) {
     cdsProfileCreatePromise = createCDSProfile(profilePayload)
       .then((response) => {
-        if (response?.cds_profile) {
-          setAsgardeoDomainCDSProfileCookie(response.cds_profile);
-        }
-
         cdsProfileId = response.profile_id || response.id || null;
+        cdsAnonymousProfileTracker = response.anonymous_profile_tracker || null;
 
         if (cdsProfileId) {
-          setCookie(CDS_PROFILE_ID_COOKIE, cdsProfileId, COOKIE_MAX_AGE);
+          setStorageValue(CDS_PROFILE_ID_STORAGE_KEY, cdsProfileId);
+        }
+
+        if (cdsAnonymousProfileTracker) {
+          setStorageValue(CDS_ANON_TRACKER_STORAGE_KEY, cdsAnonymousProfileTracker);
         }
 
         return response;
@@ -165,17 +129,55 @@ export async function getCDSProfile(profileId) {
 }
 
 export function initializeCDSFromCookie() {
-  const profileId = getCookie(CDS_PROFILE_ID_COOKIE);
+  const profileId = getStorageValue(CDS_PROFILE_ID_STORAGE_KEY);
+  const anonymousProfileTracker = getStorageValue(CDS_ANON_TRACKER_STORAGE_KEY);
 
   if (profileId) {
     cdsProfileId = profileId;
   }
 
+  if (anonymousProfileTracker) {
+    cdsAnonymousProfileTracker = anonymousProfileTracker;
+  }
+
   return profileId;
 }
 
+export function getAnonymousProfileTracker() {
+  if (cdsAnonymousProfileTracker) {
+    return cdsAnonymousProfileTracker;
+  }
+
+  const storedAnonymousProfileTracker = getStorageValue(CDS_ANON_TRACKER_STORAGE_KEY);
+
+  if (storedAnonymousProfileTracker) {
+    cdsAnonymousProfileTracker = storedAnonymousProfileTracker;
+  }
+
+  return cdsAnonymousProfileTracker;
+}
+
+export async function createSignInConfigWithCDSTracker() {
+  let anonymousProfileTracker = getAnonymousProfileTracker();
+
+  if (!anonymousProfileTracker) {
+    try {
+      const profile = await ensureCDSProfile({});
+      anonymousProfileTracker = profile?.anonymous_profile_tracker || getAnonymousProfileTracker();
+    } catch {
+      anonymousProfileTracker = getAnonymousProfileTracker();
+    }
+  }
+
+  return anonymousProfileTracker
+    ? { anonymous_profile_tracker: anonymousProfileTracker }
+    : {};
+}
+
 export function clearCDSCookies() {
-  deleteCookie(CDS_PROFILE_ID_COOKIE);
+  removeStorageValue(CDS_PROFILE_ID_STORAGE_KEY);
+  removeStorageValue(CDS_ANON_TRACKER_STORAGE_KEY);
   cdsProfileId = null;
+  cdsAnonymousProfileTracker = null;
   cdsProfileCreatePromise = null;
 }
