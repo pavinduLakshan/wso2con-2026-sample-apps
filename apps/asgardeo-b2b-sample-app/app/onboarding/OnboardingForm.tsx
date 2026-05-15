@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "../lib/auth-client";
+import { useAuth } from "../lib/auth/client";
 import LoadingScreen, { LoadingStep } from "../LoadingScreen";
 import PlanSelection from "./PlanSelection";
 

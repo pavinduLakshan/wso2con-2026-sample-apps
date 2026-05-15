@@ -1,8 +1,8 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import LoadingScreen from "../LoadingScreen";
-import { buildUserFromTokens, type AppUser } from "./auth";
+import LoadingScreen from "../../LoadingScreen";
+import { buildUserFromTokens, type AppUser } from "./utils";
 
 interface SignInOptions {
   fidp?: string;

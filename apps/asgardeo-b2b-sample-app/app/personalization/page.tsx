@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "../lib/auth-client";
-import { getRoleFromPermissions, UserRole } from "../lib/auth";
+import { useAuth } from "../lib/auth/client";
+import { getRoleFromPermissions, UserRole } from "../lib/auth/utils";
 import WorkspaceShell from "../WorkspaceShell";
 
 const IS_PREMIUM = false;

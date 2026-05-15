@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import WorkspaceShell from "../WorkspaceShell";
-import { UserRole } from "../lib/auth";
+import { UserRole } from "../lib/auth/utils";
 
 type Tab = "users" | "roles" | "enterprise-idp";
 type UserStatus = "Active" | "Inactive" | "Invited";

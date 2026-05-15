@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import WorkspaceShell from "../WorkspaceShell";
-import { UserRole } from "../lib/auth";
+import { UserRole } from "../lib/auth/utils";
 
 type TripType = "one-way" | "round-trip" | "multi-city";
 type PolicyStatus = "in-policy" | "out-of-policy" | "approval-required";

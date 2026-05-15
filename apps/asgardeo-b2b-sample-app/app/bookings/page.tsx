@@ -1,7 +1,7 @@
 "use client";
 
-import { useAuth } from "../lib/auth-client";
-import { getRoleFromPermissions, UserRole } from "../lib/auth";
+import { useAuth } from "../lib/auth/client";
+import { getRoleFromPermissions, UserRole } from "../lib/auth/utils";
 import BookingsDashboard from "./BookingsDashboard";
 
 export default function BookingsPage() {

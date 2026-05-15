@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useAuth } from "./lib/auth-client";
+import { useAuth } from "./lib/auth/client";
 import AdminSidebar from "./AdminSidebar";
 import ImpersonationBanner from "./ImpersonationBanner";
-import { UserRole } from "./lib/auth";
+import WorkspaceLoader from "./WorkspaceLoader";
+import { UserRole } from "./lib/auth/utils";
 
 const adminNavItems = [
   { href: "/requests", label: "Travel policies", shortLabel: "P" },
@@ -31,12 +32,14 @@ export default function WorkspaceShell({
   activeHref,
   children,
   eyebrow,
+  loading,
   role,
   title
 }: Readonly<{
   activeHref: string;
   children: ReactNode;
   eyebrow: string;
+  loading?: boolean;
   role: UserRole;
   title: string;
 }>) {
@@ -59,7 +62,10 @@ export default function WorkspaceShell({
               <h1>{title}</h1>
             </div>
           </header>
-          {children}
+          <div style={{ position: "relative" }}>
+            {loading && <WorkspaceLoader />}
+            {children}
+          </div>
         </section>
       </main>
     );
@@ -78,7 +84,10 @@ export default function WorkspaceShell({
           </div>
           <ProfileActions />
         </header>
-        {children}
+        <div style={{ position: "relative" }}>
+          {loading && <WorkspaceLoader />}
+          {children}
+        </div>
       </section>
     </main>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useAuth } from "./lib/auth-client";
+import { useAuth } from "./lib/auth/client";
 
 function useLandingUser() {
   const { isSignedIn, user, signIn, signOut } = useAuth();

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useAuth } from "./lib/auth-client";
+import { useAuth } from "./lib/auth/client";
 
 export default function HeroCtaSection() {
   const { isSignedIn, signIn } = useAuth();
