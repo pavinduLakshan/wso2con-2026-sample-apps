@@ -100,10 +100,22 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
   const expiryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearExpiredSession = useCallback(() => {
+    const storedIdToken = localStorage.getItem("id_token");
+    const storedAccessToken = localStorage.getItem("access_token");
+    const payload = decodeJwtPayload(storedIdToken ?? storedAccessToken ?? "");
+    const orgId = typeof payload?.org_id === "string" ? payload.org_id : null;
+
     localStorage.removeItem("access_token");
     localStorage.removeItem("id_token");
     setAccessToken(null);
     setIdToken(null);
+
+    if (orgId) {
+      const afterSignInUrl = process.env.NEXT_PUBLIC_ASGARDEO_AFTER_SIGN_IN_URL ?? window.location.origin;
+      const redirectUrl = new URL(afterSignInUrl);
+      redirectUrl.searchParams.set("orgId", orgId);
+      window.location.replace(redirectUrl.toString());
+    }
   }, []);
 
   const scheduleExpiryCheck = useCallback((token: string) => {
@@ -189,6 +201,11 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
     const orgId = params.get("orgId");
 
     if (!orgId) {
+      return;
+    }
+
+    const storedToken = localStorage.getItem("access_token");
+    if (storedToken && !isTokenExpired(storedToken)) {
       return;
     }
 

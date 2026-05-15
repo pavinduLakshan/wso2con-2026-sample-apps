@@ -1,6 +1,6 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { NextRequest, NextResponse } from "next/server";
-import { UserRole } from "./utils";
+import { USER_ROLE_TO_ASGARDEO_ROLE, UserRole } from "./utils";
 
 export interface TokenClaims {
   orgId: string;
@@ -61,15 +61,7 @@ export async function requireRole(
   const result = await requireAuth(request);
   if (result instanceof NextResponse) return result;
 
-  const adminRole = process.env.NEXT_PUBLIC_ASGARDEO_ADMIN_ROLE_NAME ?? "admin";
-  const memberRole = process.env.NEXT_PUBLIC_ASGARDEO_MEMBER_ROLE_NAME ?? "member";
-
-  const roleMap: Record<UserRole, string> = {
-    [UserRole.ADMIN]: adminRole,
-    [UserRole.MEMBER]: memberRole,
-  };
-
-  const allowed = allowedRoles.map((r) => roleMap[r]);
+  const allowed = allowedRoles.map((r) => USER_ROLE_TO_ASGARDEO_ROLE[r]);
   const hasRole = result.claims.roles.some((r) => allowed.includes(r));
 
   if (!hasRole) {

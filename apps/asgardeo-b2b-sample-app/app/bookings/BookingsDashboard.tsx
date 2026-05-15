@@ -57,8 +57,8 @@ const POLICY_CLASS: Record<PolicyStatus, string> = {
   "approval-required": "warning-pill",
 };
 
-export default function BookingsDashboard({ role }: { role: UserRole }) {
-  const isAdmin = role === UserRole.ADMIN;
+export default function BookingsDashboard({ roles }: { roles: UserRole[] }) {
+  const isAdmin = roles.includes(UserRole.ADMIN);
 
   const [tripType, setTripType] = useState<TripType>("one-way");
   const [traveler, setTraveler] = useState(TRAVELERS[0]);
@@ -113,7 +113,7 @@ export default function BookingsDashboard({ role }: { role: UserRole }) {
     <WorkspaceShell
       activeHref="/bookings"
       eyebrow={isAdmin ? "Admin workspace" : "Member workspace"}
-      role={role}
+      roles={roles}
       title={isAdmin ? "Book travel for any employee" : "Book your next flight"}
     >
       <section className="booking-hero">

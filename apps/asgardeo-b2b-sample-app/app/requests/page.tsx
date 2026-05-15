@@ -1,17 +1,17 @@
 "use client";
 
 import { useAuth } from "../lib/auth/client";
-import { getRoleFromPermissions, UserRole } from "../lib/auth/utils";
+import { getRolesFromPermissions, UserRole } from "../lib/auth/utils";
 import TravelPolicyDashboard from "./TravelPolicyDashboard";
 import WorkspaceShell from "../WorkspaceShell";
 
 export default function RequestsPage() {
   const { user } = useAuth();
-  const role = user ? getRoleFromPermissions(user.permissions) : UserRole.MEMBER;
+  const roles = user ? getRolesFromPermissions(user.permissions) : [UserRole.MEMBER];
 
-  if (role !== UserRole.ADMIN) {
+  if (!roles.includes(UserRole.ADMIN)) {
     return (
-      <WorkspaceShell activeHref="/requests" eyebrow="Member workspace" role={role} title="Travel policies">
+      <WorkspaceShell activeHref="/requests" eyebrow="Member workspace" roles={roles} title="Travel policies">
         <section className="workspace-panel">
           <p className="eyebrow">Access restricted</p>
           <h2>You don&apos;t have permission to view this page.</h2>
@@ -21,5 +21,5 @@ export default function RequestsPage() {
     );
   }
 
-  return <TravelPolicyDashboard role={role} />;
+  return <TravelPolicyDashboard roles={roles} />;
 }

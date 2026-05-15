@@ -1,12 +1,12 @@
 "use client";
 
 import { useAuth } from "../lib/auth/client";
-import { getRoleFromPermissions, UserRole } from "../lib/auth/utils";
+import { getRolesFromPermissions, UserRole } from "../lib/auth/utils";
 import BookingsDashboard from "./BookingsDashboard";
 
 export default function BookingsPage() {
   const { user } = useAuth();
-  const role = user ? getRoleFromPermissions(user.permissions) : UserRole.MEMBER;
+  const roles = user ? getRolesFromPermissions(user.permissions) : [UserRole.MEMBER];
 
-  return <BookingsDashboard role={role} />;
+  return <BookingsDashboard roles={roles} />;
 }

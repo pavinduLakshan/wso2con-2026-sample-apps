@@ -2,19 +2,19 @@
 
 import { useState } from "react";
 import { useAuth } from "../lib/auth/client";
-import { getRoleFromPermissions, UserRole } from "../lib/auth/utils";
+import { getRolesFromPermissions, UserRole } from "../lib/auth/utils";
 import WorkspaceShell from "../WorkspaceShell";
 
 const IS_PREMIUM = false;
 
 export default function PersonalizationPage() {
   const { user } = useAuth();
-  const role = user ? getRoleFromPermissions(user.permissions) : UserRole.MEMBER;
+  const roles = user ? getRolesFromPermissions(user.permissions) : [UserRole.MEMBER];
   const [brandColor, setBrandColor] = useState("#2563eb");
 
-  if (role !== UserRole.ADMIN) {
+  if (!roles.includes(UserRole.ADMIN)) {
     return (
-      <WorkspaceShell activeHref="/personalization" eyebrow="Member workspace" role={role} title="Personalization">
+      <WorkspaceShell activeHref="/personalization" eyebrow="Member workspace" roles={roles} title="Personalization">
         <section className="workspace-panel">
           <p className="eyebrow">Access restricted</p>
           <h2>You don&apos;t have permission to view this page.</h2>
@@ -28,7 +28,7 @@ export default function PersonalizationPage() {
     <WorkspaceShell
       activeHref="/personalization"
       eyebrow="Admin workspace"
-      role={role}
+      roles={roles}
       title="Personalization"
     >
       <section className="command-panel">

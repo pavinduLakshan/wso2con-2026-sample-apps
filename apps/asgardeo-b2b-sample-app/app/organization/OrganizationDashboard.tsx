@@ -25,6 +25,12 @@ interface RoleDef {
   permissions: Permission[];
 }
 
+interface RoleData {
+  id: string;
+  name: RoleName;
+  userIds: string[];
+}
+
 interface IdpConfig {
   clientId: string;
   clientSecret: string;
@@ -62,7 +68,7 @@ const TABS: { id: Tab; label: string; paid?: boolean }[] = [
 
 const EMPTY_IDP: IdpConfig = { clientId: "", clientSecret: "", authorizationEndpoint: "", tokenEndpoint: "", jwksEndpoint: "" };
 
-export default function OrganizationDashboard({ role }: { role: UserRole }) {
+export default function OrganizationDashboard({ roles }: { roles: UserRole[] }) {
   const { accessToken } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("users");
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -72,10 +78,17 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
   const [page, setPage] = useState(1);
 
   const [editUser, setEditUser] = useState<Employee | null>(null);
+  const [editActionLoading, setEditActionLoading] = useState<"reset" | "lock" | null>(null);
+  const [editActionFeedback, setEditActionFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  const [rolesData, setRolesData] = useState<RoleData[]>([]);
+  const [rolesLoading, setRolesLoading] = useState(true);
 
   const [assignRoleTarget, setAssignRoleTarget] = useState<RoleName | null>(null);
   const [assignSearch, setAssignSearch] = useState("");
   const [assignSelected, setAssignSelected] = useState<Set<string>>(new Set());
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
 
   const [idpConfig, setIdpConfig] = useState<IdpConfig | null>(null);
   const [idpForm, setIdpForm] = useState<IdpConfig>(EMPTY_IDP);
@@ -91,17 +104,35 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
 
   const isPremium = showPremiumPreview;
 
-  useEffect(() => {
-    if (!accessToken) return;
-    let cancelled = false;
+  const fetchRoles = (token: string, signal?: AbortSignal) => {
+    setRolesLoading(true);
+    fetch("/api/organization/roles", {
+      headers: { Authorization: `Bearer ${token}` },
+      signal,
+    })
+      .then((res) => res.json())
+      .then((data: { roles?: RoleData[] }) => {
+        if (signal?.aborted) return;
+        if (Array.isArray(data.roles)) {
+          setRolesData(data.roles as RoleData[]);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!signal?.aborted) setRolesLoading(false);
+      });
+  };
+
+  const fetchUsers = (token: string, signal?: AbortSignal) => {
     setUsersLoading(true);
     setUsersError(null);
     fetch("/api/organization/users", {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: `Bearer ${token}` },
+      signal,
     })
       .then((res) => res.json())
       .then((data: { users?: Employee[]; message?: string }) => {
-        if (cancelled) return;
+        if (signal?.aborted) return;
         if (Array.isArray(data.users)) {
           setEmployees(data.users.map((u) => ({ ...u, role: u.role ?? "Member" })));
         } else {
@@ -109,12 +140,19 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
         }
       })
       .catch(() => {
-        if (!cancelled) setUsersError("Failed to load users.");
+        if (!signal?.aborted) setUsersError("Failed to load users.");
       })
       .finally(() => {
-        if (!cancelled) setUsersLoading(false);
+        if (!signal?.aborted) setUsersLoading(false);
       });
-    return () => { cancelled = true; };
+  };
+
+  useEffect(() => {
+    if (!accessToken) return;
+    const controller = new AbortController();
+    fetchUsers(accessToken, controller.signal);
+    fetchRoles(accessToken, controller.signal);
+    return () => controller.abort();
   }, [accessToken]);
 
   const filteredEmployees = employees.filter(
@@ -129,19 +167,51 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
     setPage(1);
   }
 
-  function handleToggleStatus(userId: string) {
-    setEmployees((prev) =>
-      prev.map((u) => {
-        if (u.id !== userId) return u;
-        const next: UserStatus = u.status === "Active" ? "Locked" : "Active";
-        return { ...u, status: next };
-      })
-    );
-    setEditUser((prev) =>
-      prev?.id === userId
-        ? { ...prev, status: prev.status === "Active" ? "Locked" : "Active" }
-        : prev
-    );
+  async function handleToggleStatus(user: Employee) {
+    const willLock = user.status === "Active";
+    setEditActionLoading("lock");
+    setEditActionFeedback(null);
+    try {
+      const res = await fetch(`/api/organization/users/${user.id}`, {
+        body: JSON.stringify({ locked: willLock }),
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        method: "PATCH",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setEditActionFeedback({ type: "error", message: (data as { message?: string }).message ?? "Failed to update account status." });
+        return;
+      }
+      const next: UserStatus = willLock ? "Locked" : "Active";
+      setEmployees((prev) => prev.map((u) => u.id === user.id ? { ...u, status: next } : u));
+      setEditUser((prev) => prev?.id === user.id ? { ...prev, status: next } : prev);
+      setEditActionFeedback({ type: "success", message: willLock ? "Account locked." : "Account unlocked." });
+    } catch {
+      setEditActionFeedback({ type: "error", message: "Failed to update account status." });
+    } finally {
+      setEditActionLoading(null);
+    }
+  }
+
+  async function handleSendResetLink(user: Employee) {
+    setEditActionLoading("reset");
+    setEditActionFeedback(null);
+    try {
+      const res = await fetch(`/api/organization/users/${user.id}/reset-password`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setEditActionFeedback({ type: "error", message: (data as { message?: string }).message ?? "Failed to send reset link." });
+        return;
+      }
+      setEditActionFeedback({ type: "success", message: `Password reset link sent to ${user.email}.` });
+    } catch {
+      setEditActionFeedback({ type: "error", message: "Failed to send reset link." });
+    } finally {
+      setEditActionLoading(null);
+    }
   }
 
   function handleImpersonate(user: Employee) {
@@ -151,21 +221,44 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
   }
 
   function openAssignRole(roleName: RoleName) {
-    setAssignSelected(new Set(employees.filter((e) => e.role === roleName).map((e) => e.id)));
+    const roleEntry = rolesData.find((r) => r.name === roleName);
+    const currentUserIds = new Set(roleEntry?.userIds ?? []);
+    setAssignSelected(new Set(employees.filter((e) => currentUserIds.has(e.id)).map((e) => e.id)));
     setAssignSearch("");
+    setAssignError(null);
     setAssignRoleTarget(roleName);
   }
 
-  function submitAssignRole() {
+  async function submitAssignRole() {
     if (!assignRoleTarget) return;
-    setEmployees((prev) =>
-      prev.map((u) => {
-        if (assignSelected.has(u.id)) return { ...u, role: assignRoleTarget };
-        if (u.role === assignRoleTarget) return { ...u, role: "Member" };
-        return u;
-      })
-    );
-    setAssignRoleTarget(null);
+    const roleEntry = rolesData.find((r) => r.name === assignRoleTarget);
+    if (!roleEntry) return;
+
+    setAssignLoading(true);
+    setAssignError(null);
+
+    try {
+      const res = await fetch(`/api/organization/roles/${roleEntry.id}/users`, {
+        body: JSON.stringify({ userIds: Array.from(assignSelected) }),
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        method: "PUT",
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setAssignError((data as { message?: string }).message ?? "Failed to update role assignments.");
+        return;
+      }
+
+      setRolesData((prev) =>
+        prev.map((r) => r.id === roleEntry.id ? { ...r, userIds: Array.from(assignSelected) } : r)
+      );
+      setAssignRoleTarget(null);
+    } catch {
+      setAssignError("Failed to update role assignments.");
+    } finally {
+      setAssignLoading(false);
+    }
   }
 
   function openInviteModal() {
@@ -243,7 +336,7 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
     <WorkspaceShell
       activeHref="/organization"
       eyebrow="Admin workspace"
-      role={role}
+      roles={roles}
       title="Users, roles & settings"
     >
       <section className="command-panel">
@@ -300,9 +393,39 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
             </div>
 
             {usersLoading ? (
-              <p className="empty-state">Loading users…</p>
+              <div className="org-user-table" role="table" aria-label="Loading employees" aria-busy="true">
+                <div className="org-user-table-head" role="row">
+                  <span>Name</span>
+                  <span>Email</span>
+                  <span>Status</span>
+                  <span />
+                </div>
+                {Array.from({ length: PAGE_SIZE }).map((_, i) => (
+                  <div className="org-user-table-row org-user-table-row--skeleton" key={i} role="row">
+                    <div className="skeleton-block skeleton-name" />
+                    <div className="skeleton-block skeleton-email" />
+                    <div className="skeleton-block skeleton-badge" />
+                    <div className="skeleton-block skeleton-btn" />
+                  </div>
+                ))}
+              </div>
             ) : usersError ? (
-              <p className="empty-state" style={{ color: "var(--app-error, #b91c1c)" }}>{usersError}</p>
+              <div className="users-error-state" role="alert">
+                <svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true">
+                  <circle cx="18" cy="18" r="16" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="M18 11v8M18 23.5h.01" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                </svg>
+                <h4>Failed to load users</h4>
+                <p>{usersError}</p>
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  style={{ marginTop: "4px", fontSize: "0.84rem", minHeight: "34px", padding: "0 16px" }}
+                  onClick={() => accessToken && fetchUsers(accessToken)}
+                >
+                  Try again
+                </button>
+              </div>
             ) : (
               <>
                 <div className="org-user-table" role="table" aria-label="Employee directory">
@@ -416,9 +539,9 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
                 <h2>Users per role</h2>
               </div>
             </div>
-            <div className="policy-list">
+            <div className="policy-list" aria-busy={rolesLoading}>
               {ROLES.map((r) => {
-                const count = employees.filter((u) => u.role === r.name).length;
+                const count = rolesData.find((rd) => rd.name === r.name)?.userIds.length ?? 0;
                 return (
                   <article className="policy-row" key={r.name}>
                     <div>
@@ -426,17 +549,25 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
                       <span>{r.description}</span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                      <em style={{ background: "var(--app-success-bg)", color: "var(--app-success)", borderRadius: "999px", fontSize: "0.78rem", fontStyle: "normal", fontWeight: 750, padding: "6px 10px", whiteSpace: "nowrap" }}>
-                        {count} {count === 1 ? "user" : "users"}
-                      </em>
-                      <button
-                        className="button button-secondary"
-                        type="button"
-                        style={{ fontSize: "0.82rem", minHeight: "34px", padding: "0 12px" }}
-                        onClick={() => openAssignRole(r.name)}
-                      >
-                        Assign users
-                      </button>
+                      {rolesLoading ? (
+                        <div className="skeleton-block" style={{ borderRadius: "999px", height: "28px", width: "58px" }} />
+                      ) : (
+                        <em style={{ background: "var(--app-success-bg)", color: "var(--app-success)", borderRadius: "999px", fontSize: "0.78rem", fontStyle: "normal", fontWeight: 750, padding: "6px 10px", whiteSpace: "nowrap" }}>
+                          {count} {count === 1 ? "user" : "users"}
+                        </em>
+                      )}
+                      {rolesLoading ? (
+                        <div className="skeleton-block" style={{ borderRadius: "6px", height: "34px", width: "96px" }} />
+                      ) : (
+                        <button
+                          className="button button-secondary"
+                          type="button"
+                          style={{ fontSize: "0.82rem", minHeight: "34px", padding: "0 12px" }}
+                          onClick={() => openAssignRole(r.name)}
+                        >
+                          Assign users
+                        </button>
+                      )}
                     </div>
                   </article>
                 );
@@ -709,7 +840,7 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
 
       {/* ── Edit User Modal ──────────────────────────────────────── */}
       {editUser && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Edit user" onClick={() => setEditUser(null)}>
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Edit user" onClick={() => { setEditUser(null); setEditActionFeedback(null); }}>
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
@@ -717,7 +848,7 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
                 <h3 style={{ margin: "2px 0 4px" }}>{editUser.name}</h3>
                 <span className="cell-muted">{editUser.email}</span>
               </div>
-              <button className="modal-close" type="button" aria-label="Close" onClick={() => setEditUser(null)}>
+              <button className="modal-close" type="button" aria-label="Close" onClick={() => { setEditUser(null); setEditActionFeedback(null); }}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                   <path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                 </svg>
@@ -736,6 +867,37 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
                 </div>
               </div>
 
+              {editActionFeedback && (
+                <div
+                  role="alert"
+                  style={{
+                    alignItems: "center",
+                    background: editActionFeedback.type === "success" ? "var(--app-success-bg, #eefbf4)" : "var(--app-error-bg, #fff5f5)",
+                    border: `1px solid ${editActionFeedback.type === "success" ? "#bbf7d0" : "#fecaca"}`,
+                    borderRadius: "8px",
+                    color: editActionFeedback.type === "success" ? "#047857" : "#b91c1c",
+                    display: "flex",
+                    fontSize: "0.86rem",
+                    gap: "8px",
+                    marginTop: "12px",
+                    padding: "10px 14px",
+                  }}
+                >
+                  {editActionFeedback.type === "success" ? (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+                      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+                      <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+                      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+                      <path d="M8 5v3.5M8 11h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    </svg>
+                  )}
+                  {editActionFeedback.message}
+                </div>
+              )}
+
               <div className="modal-actions-grid">
                 <div className="modal-action-card">
                   <div className="modal-action-icon modal-action-icon--blue">
@@ -753,12 +915,11 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
                   <button
                     className="button button-secondary"
                     type="button"
+                    disabled={editActionLoading !== null}
                     style={{ fontSize: "0.82rem", minHeight: "34px", padding: "0 14px", whiteSpace: "nowrap" }}
-                    onClick={() => {
-                      alert(`Password reset link sent to ${editUser.email}`);
-                    }}
+                    onClick={() => handleSendResetLink(editUser)}
                   >
-                    Send reset link
+                    {editActionLoading === "reset" ? "Sending…" : "Send reset link"}
                   </button>
                 </div>
 
@@ -790,10 +951,13 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
                   <button
                     className={`button ${editUser.status === "Active" ? "modal-btn-warning" : "button-secondary"}`}
                     type="button"
+                    disabled={editActionLoading !== null}
                     style={{ fontSize: "0.82rem", minHeight: "34px", padding: "0 14px", whiteSpace: "nowrap" }}
-                    onClick={() => handleToggleStatus(editUser.id)}
+                    onClick={() => handleToggleStatus(editUser)}
                   >
-                    {editUser.status === "Active" ? "Lock account" : "Unlock account"}
+                    {editActionLoading === "lock"
+                      ? (editUser.status === "Active" ? "Locking…" : "Unlocking…")
+                      : (editUser.status === "Active" ? "Lock account" : "Unlock account")}
                   </button>
                 </div>
 
@@ -880,12 +1044,21 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
                   <p className="empty-state">No users match your search.</p>
                 )}
               </div>
+              {assignError && (
+                <div className="form-error" role="alert" style={{ display: "flex", gap: "10px", alignItems: "flex-start", marginTop: "12px" }}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ flexShrink: 0, marginTop: "2px" }}>
+                    <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M8 5v3.5M8 11h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                  <span style={{ fontSize: "0.86rem" }}>{assignError}</span>
+                </div>
+              )}
               <div className="action-cluster" style={{ marginTop: "16px", justifyContent: "flex-end" }}>
-                <button className="button button-secondary" type="button" onClick={() => setAssignRoleTarget(null)}>
+                <button className="button button-secondary" type="button" disabled={assignLoading} onClick={() => setAssignRoleTarget(null)}>
                   Cancel
                 </button>
-                <button className="button button-primary" type="button" onClick={submitAssignRole}>
-                  Save ({assignSelected.size} selected)
+                <button className="button button-primary" type="button" disabled={assignLoading} onClick={submitAssignRole}>
+                  {assignLoading ? "Saving…" : `Save (${assignSelected.size} selected)`}
                 </button>
               </div>
             </div>
