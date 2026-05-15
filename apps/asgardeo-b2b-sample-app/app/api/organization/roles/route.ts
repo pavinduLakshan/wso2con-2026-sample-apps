@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole } from "../../../lib/auth/guard";
-import { ASGARDEO_ROLE_TO_USER_ROLE, UserRole } from "../../../lib/auth/utils";
+import { requireScope } from "../../../lib/auth/guard";
+import { ASGARDEO_ROLE_TO_USER_ROLE, Scope } from "../../../lib/auth/utils";
 import { scimListRolesWithUsers } from "../../../lib/asgardeo/client";
 
 export async function GET(request: NextRequest) {
-  const auth = await requireRole(request, [UserRole.ADMIN]);
+  const auth = await requireScope(request, [Scope.ROLE_VIEW]);
   if (auth instanceof NextResponse) return auth;
 
   try {
