@@ -4,13 +4,15 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useAuth } from "./lib/auth-client";
 import AdminSidebar from "./AdminSidebar";
-import type { UserRole } from "./lib/auth";
+import ImpersonationBanner from "./ImpersonationBanner";
+import { UserRole } from "./lib/auth";
 
 const adminNavItems = [
-  { href: "/dashboard", label: "Management", shortLabel: "M" },
   { href: "/requests", label: "Travel policies", shortLabel: "P" },
   { href: "/organization", label: "Users and roles", shortLabel: "U" },
-  { href: "/bookings", label: "Flight booking", shortLabel: "F" }
+  { href: "/bookings", label: "Flight booking", shortLabel: "F" },
+  { href: "/personalization", label: "Personalization", shortLabel: "Ps" },
+  { href: "/billing", label: "Billing", shortLabel: "Bi" }
 ];
 
 function ProfileActions() {
@@ -38,9 +40,10 @@ export default function WorkspaceShell({
   role: UserRole;
   title: string;
 }>) {
-  if (role !== "ADMIN") {
+  if (role !== UserRole.ADMIN) {
     return (
       <main className="member-shell">
+        <ImpersonationBanner />
         <header className="member-topbar">
           <Link className="sidebar-brand" href="/">
             <span className="sidebar-brand-mark">W</span>
@@ -64,6 +67,7 @@ export default function WorkspaceShell({
 
   return (
     <main className="app-shell admin-shell">
+      <ImpersonationBanner />
       <AdminSidebar activeHref={activeHref} navItems={adminNavItems} />
 
       <section className="workspace">

@@ -3,94 +3,24 @@
 import Link from "next/link";
 import { useAuth } from "./lib/auth-client";
 
-type UserRecord = Record<string, unknown>;
-
-function getStringValue(user: UserRecord | undefined, keys: string[]) {
-  for (const key of keys) {
-    const value = user?.[key];
-
-    if (typeof value === "string" && value.trim()) {
-      return value.trim();
-    }
-  }
-
-  return "";
-}
-
-function getEmail(user: UserRecord | undefined) {
-  const emails = user?.emails;
-
-  if (Array.isArray(emails)) {
-    for (const email of emails) {
-      if (typeof email === "string" && email.trim()) {
-        return email.trim();
-      }
-
-      if (email && typeof email === "object" && "value" in email && typeof email.value === "string") {
-        return email.value.trim();
-      }
-    }
-  }
-
-  return getStringValue(user, [
-    "email",
-    "mail",
-    "userName",
-    "username",
-    "preferred_username",
-    "http://wso2.org/claims/emailaddress"
-  ]);
-}
-
-function getDisplayName(user: UserRecord | undefined) {
-  const directName = getStringValue(user, ["displayName", "fullName", "name"]);
-
-  if (directName) {
-    return directName;
-  }
-
-  const name = user?.name;
-
-  if (name && typeof name === "object") {
-    const givenName = "givenName" in name && typeof name.givenName === "string" ? name.givenName : "";
-    const familyName = "familyName" in name && typeof name.familyName === "string" ? name.familyName : "";
-    const formatted = "formatted" in name && typeof name.formatted === "string" ? name.formatted : "";
-    const composed = `${givenName} ${familyName}`.trim();
-
-    return composed || formatted;
-  }
-
-  const givenName = getStringValue(user, ["given_name", "givenName", "firstName"]);
-  const familyName = getStringValue(user, ["family_name", "familyName", "lastName"]);
-  const composed = `${givenName} ${familyName}`.trim();
-  const email = getEmail(user);
-  const emailName = email ? email.split("@")[0] : "";
-
-  return composed || emailName || "Workspace user";
-}
-
-function getFirstName(displayName: string) {
-  return displayName.split(/\s+/)[0] || displayName;
-}
-
-function getInitials(displayName: string) {
-  const parts = displayName.split(/\s+/).filter(Boolean);
-  const initials = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : displayName.slice(0, 2);
-
-  return initials.toUpperCase();
-}
-
 function useLandingUser() {
   const { isSignedIn, user, signIn, signOut } = useAuth();
-  const userRecord = user && typeof user === "object" ? (user as UserRecord) : undefined;
-  const displayName = getDisplayName(userRecord);
-  const email = getEmail(userRecord);
+
+  const firstName = user?.firstName || "";
+  const lastName = user?.lastName || "";
+  const displayName = `${firstName} ${lastName}`.trim() || (user?.email?.split("@")[0] ?? "") || "Workspace user";
+  const initials = (() => {
+    const parts = [firstName, lastName].filter(Boolean);
+    return parts.length > 1
+      ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+      : displayName.slice(0, 2).toUpperCase();
+  })();
 
   return {
     displayName,
-    email,
-    firstName: displayName === "Workspace user" ? "there" : getFirstName(displayName),
-    initials: getInitials(displayName),
+    email: user?.email ?? "",
+    firstName: displayName === "Workspace user" ? "there" : (firstName || displayName.split(/\s+/)[0]),
+    initials,
     isSignedIn,
     signIn,
     signOut

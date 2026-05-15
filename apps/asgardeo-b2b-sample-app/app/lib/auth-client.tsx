@@ -2,8 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import LoadingScreen from "../LoadingScreen";
-
-type User = Record<string, unknown>;
+import { buildUserFromTokens, type AppUser } from "./auth";
 
 interface SignInOptions {
   fidp?: string;
@@ -15,7 +14,7 @@ interface AuthState {
   isSignedIn: boolean;
   accessToken: string | null;
   idToken: string | null;
-  user: User | null;
+  user: AppUser | null;
   signIn: (options?: SignInOptions) => void;
   signOut: () => void;
   switchOrganization: (org: { name?: string; orgId?: string }) => void;
@@ -31,7 +30,7 @@ const AuthContext = createContext<AuthState>({
   switchOrganization: () => {}
 });
 
-function decodeJwtPayload(token: string): User | null {
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
   const [, payload] = token.split(".");
 
   if (!payload) {
@@ -41,7 +40,7 @@ function decodeJwtPayload(token: string): User | null {
   try {
     const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
     const json = atob(base64);
-    return JSON.parse(json) as User;
+    return JSON.parse(json) as Record<string, unknown>;
   } catch {
     return null;
   }
@@ -246,7 +245,13 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
     window.location.href = buildAuthorizeUrl({ fidp: "OrganizationSSO", org: org.name, orgId: org.orgId });
   }, []);
 
-  const user = accessToken ? decodeJwtPayload(accessToken) : null;
+  const user = (() => {
+    if (!accessToken) return null;
+    const accessPayload = decodeJwtPayload(accessToken);
+    if (!accessPayload) return null;
+    const idPayload = idToken ? (decodeJwtPayload(idToken) ?? {}) : {};
+    return buildUserFromTokens(accessPayload, idPayload);
+  })();
 
   return (
     <AuthContext.Provider
