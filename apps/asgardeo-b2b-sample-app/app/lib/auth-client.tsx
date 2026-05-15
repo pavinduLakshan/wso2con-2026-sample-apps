@@ -47,6 +47,17 @@ function decodeJwtPayload(token: string): User | null {
   }
 }
 
+function getTokenExpiryMs(token: string): number | null {
+  const payload = decodeJwtPayload(token);
+  if (!payload || typeof payload.exp !== "number") return null;
+  return payload.exp * 1000 - Date.now();
+}
+
+function isTokenExpired(token: string): boolean {
+  const ttl = getTokenExpiryMs(token);
+  return ttl === null || ttl <= 0;
+}
+
 function buildAuthorizeUrl(options?: SignInOptions): string {
   const baseUrl = process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL ?? "";
   const clientId = process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID ?? "";
@@ -84,24 +95,53 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isOrgRedirecting, setIsOrgRedirecting] = useState(false);
   const exchangingRef = useRef(false);
+  const expiryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearExpiredSession = useCallback(() => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("id_token");
+    setAccessToken(null);
+    setIdToken(null);
+  }, []);
+
+  const scheduleExpiryCheck = useCallback((token: string) => {
+    if (expiryTimerRef.current) clearTimeout(expiryTimerRef.current);
+    const ttl = getTokenExpiryMs(token);
+    if (ttl !== null && ttl > 0) {
+      expiryTimerRef.current = setTimeout(clearExpiredSession, ttl);
+    }
+  }, [clearExpiredSession]);
+
+  useEffect(() => {
+    return () => {
+      if (expiryTimerRef.current) clearTimeout(expiryTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const storedAccess = localStorage.getItem("access_token");
     const storedId = localStorage.getItem("id_token");
 
-    if (storedAccess) setAccessToken(storedAccess);
-    if (storedId) setIdToken(storedId);
-  }, []);
+    if (storedAccess && !isTokenExpired(storedAccess)) {
+      setAccessToken(storedAccess);
+      if (storedId) setIdToken(storedId);
+      scheduleExpiryCheck(storedAccess);
+    } else if (storedAccess) {
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("id_token");
+    }
+  }, [scheduleExpiryCheck]);
 
   const storeToken = useCallback((access: string, id?: string) => {
     localStorage.setItem("access_token", access);
     setAccessToken(access);
+    scheduleExpiryCheck(access);
 
     if (id) {
       localStorage.setItem("id_token", id);
       setIdToken(id);
     }
-  }, []);
+  }, [scheduleExpiryCheck]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
