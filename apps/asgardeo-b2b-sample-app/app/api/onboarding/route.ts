@@ -32,7 +32,10 @@ const rootTokenScopes =
   "internal_organization_create internal_organization_view internal_org_user_mgt_create internal_org_user_mgt_list";
 const organizationTokenScopes =
   process.env.ASGARDEO_ORG_SCOPES ??
-  "internal_org_user_mgt_create internal_org_user_mgt_list";
+  "internal_org_user_mgt_create internal_org_user_mgt_list internal_org_role_mgt_view internal_org_role_mgt_update";
+const userStoreName = process.env.ASGARDEO_USER_STORE_NAME ?? "DEFAULT";
+const adminRoleName = process.env.NEXT_PUBLIC_ASGARDEO_ADMIN_ROLE_NAME ?? "WayFinder-Admin";
+const memberRoleName = process.env.NEXT_PUBLIC_ASGARDEO_MEMBER_ROLE_NAME ?? "WayFinder-Member";
 const pollInterval = Number(process.env.ASGARDEO_POLL_INTERVAL_MS ?? 1500);
 const orgReadyTimeout = Number(process.env.ASGARDEO_USERSTORE_TIMEOUT_MS ?? 30000);
 const userCreationRetryTimeout = Number(process.env.ASGARDEO_USER_CREATION_RETRY_TIMEOUT_MS ?? 30000);
@@ -139,7 +142,6 @@ async function createOrganizationUser({
       emails: [
         {
           primary: true,
-          type: "work",
           value: email
         }
       ],
@@ -148,7 +150,7 @@ async function createOrganizationUser({
         givenName
       },
       ...(password ? { password } : { "urn:scim:wso2:schema": { askPassword: "true" } }),
-      userName: `DEFAULT/${email}`
+      userName: `${userStoreName}/${email}`
     }),
     headers: {
       Accept: "application/scim+json",
@@ -259,6 +261,57 @@ async function fetchDefaultUserStore(accessToken: string): Promise<boolean> {
   return true;
 }
 
+async function fetchRoleIdByName(accessToken: string, roleName: string): Promise<string | null> {
+  const config = getConfig();
+  const filter = encodeURIComponent(`displayName eq ${roleName}`);
+  const response = await fetch(`${config.baseUrl}/o/scim2/v2/Roles?filter=${filter}`, {
+    headers: {
+      Accept: "application/scim+json",
+      Authorization: `Bearer ${accessToken}`
+    },
+    method: "GET"
+  });
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch role "${roleName}".`);
+  }
+
+  const resources = body?.Resources;
+
+  if (!Array.isArray(resources) || resources.length === 0) {
+    return null;
+  }
+
+  return typeof resources[0]?.id === "string" ? resources[0].id : null;
+}
+
+async function assignRoleToUser(accessToken: string, roleId: string, userId: string) {
+  const config = getConfig();
+  const response = await fetch(`${config.baseUrl}/o/scim2/v2/Roles/${roleId}`, {
+    body: JSON.stringify({
+      Operations: [{ op: "add", path: "users", value: [{ value: userId }] }],
+      schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"]
+    }),
+    headers: {
+      Accept: "application/scim+json",
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/scim+json"
+    },
+    method: "PATCH"
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const message =
+      body && typeof body === "object" && "detail" in body && typeof body.detail === "string"
+        ? body.detail
+        : `Failed to assign role "${roleId}" to user.`;
+
+    throw new Error(message);
+  }
+}
+
 async function waitForDefaultUserStore(accessToken: string) {
   const startedAt = Date.now();
 
@@ -313,6 +366,16 @@ export async function POST(request: Request) {
       givenName,
       password
     });
+
+    const [adminRoleId, memberRoleId] = await Promise.all([
+      fetchRoleIdByName(organizationAccessToken, adminRoleName),
+      fetchRoleIdByName(organizationAccessToken, memberRoleName)
+    ]);
+
+    await Promise.all([
+      adminRoleId ? assignRoleToUser(organizationAccessToken, adminRoleId, user.id) : Promise.resolve(),
+      memberRoleId ? assignRoleToUser(organizationAccessToken, memberRoleId, user.id) : Promise.resolve()
+    ]);
 
     return NextResponse.json({
       organization,

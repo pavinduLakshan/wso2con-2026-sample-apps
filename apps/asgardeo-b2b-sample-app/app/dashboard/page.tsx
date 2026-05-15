@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import WorkspaceShell from "../WorkspaceShell";
-import { getCurrentUserRole } from "../lib/auth";
+import { useAuth } from "../lib/auth-client";
+import { getRoleFromPermissions, UserRole } from "../lib/auth";
 
 const managementCapabilities = [
   {
@@ -175,17 +178,18 @@ function MemberDashboard() {
   );
 }
 
-export default async function Dashboard() {
-  const role = await getCurrentUserRole();
+export default function Dashboard() {
+  const { user } = useAuth();
+  const role = user ? getRoleFromPermissions(user.permissions) : UserRole.MEMBER;
 
   return (
     <WorkspaceShell
-      activeHref={role === "ADMIN" ? "/dashboard" : "/bookings"}
-      eyebrow={role === "ADMIN" ? "Admin workspace" : "Member workspace"}
+      activeHref={role === UserRole.ADMIN ? "/dashboard" : "/bookings"}
+      eyebrow={role === UserRole.ADMIN ? "Admin workspace" : "Member workspace"}
       role={role}
-      title={role === "ADMIN" ? "Management console" : "Flight booking"}
+      title={role === UserRole.ADMIN ? "Management console" : "Flight booking"}
     >
-      {role === "ADMIN" ? <AdminDashboard /> : <MemberDashboard />}
+      {role === UserRole.ADMIN ? <AdminDashboard /> : <MemberDashboard />}
     </WorkspaceShell>
   );
 }
