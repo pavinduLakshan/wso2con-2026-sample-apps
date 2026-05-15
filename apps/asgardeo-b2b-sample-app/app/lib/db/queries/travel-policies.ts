@@ -25,6 +25,8 @@ const SQL_UPSERT = `
     updated_at        = datetime('now')
 `;
 
+const SQL_DELETE = "DELETE FROM travel_policies WHERE org_id = ?";
+
 export function getTravelPolicy(orgId: string): TravelPolicy | null {
   return getDb().prepare(SQL_GET).get(orgId) as TravelPolicy | null;
 }
@@ -36,4 +38,8 @@ export function upsertTravelPolicy(
   const db = getDb();
   db.prepare(SQL_UPSERT).run({ org_id: orgId, ...policy });
   return db.prepare(SQL_GET).get(orgId) as TravelPolicy;
+}
+
+export function deleteTravelPolicy(orgId: string): void {
+  getDb().prepare(SQL_DELETE).run(orgId);
 }
