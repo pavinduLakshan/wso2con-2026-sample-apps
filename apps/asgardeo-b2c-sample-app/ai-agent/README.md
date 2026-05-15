@@ -48,7 +48,7 @@ Start your MCP server first, then run the agent WebSocket server:
 
 ```bash
 cd ai-agent
-npm start
+npm run dev
 ```
 
 The chat endpoint is available at:
