@@ -5,7 +5,7 @@ import WorkspaceShell from "../WorkspaceShell";
 import { useAuth } from "../lib/auth/client";
 import { UserRole } from "../lib/auth/utils";
 
-type Tab = "users" | "roles" | "enterprise-idp";
+type Tab = "users" | "roles";
 type UserStatus = "Active" | "Locked";
 type RoleName = "Admin" | "Member" | "Idp-Manager" | "Basic-Branding-Editor" | "Advanced-Branding-Editor";
 type Permission = "Flight Booking" | "Travel Policy" | "Impersonate" | "IDP Configure" | "Basic Branding" | "Advanced Branding" | "User Mgt";
@@ -31,14 +31,6 @@ interface RoleData {
   userIds: string[];
 }
 
-interface IdpConfig {
-  clientId: string;
-  clientSecret: string;
-  authorizationEndpoint: string;
-  tokenEndpoint: string;
-  jwksEndpoint: string;
-}
-
 const ALL_PERMISSIONS: Permission[] = [
   "Flight Booking",
   "Travel Policy",
@@ -60,13 +52,10 @@ const ROLES: RoleDef[] = [
 
 const PAGE_SIZE = 5;
 
-const TABS: { id: Tab; label: string; paid?: boolean }[] = [
+const TABS: { id: Tab; label: string }[] = [
   { id: "users", label: "Users" },
   { id: "roles", label: "Roles & Permissions" },
-  { id: "enterprise-idp", label: "Enterprise IdP", paid: true },
 ];
-
-const EMPTY_IDP: IdpConfig = { clientId: "", clientSecret: "", authorizationEndpoint: "", tokenEndpoint: "", jwksEndpoint: "" };
 
 export default function OrganizationDashboard({ roles }: { roles: UserRole[] }) {
   const { accessToken } = useAuth();
@@ -90,19 +79,12 @@ export default function OrganizationDashboard({ roles }: { roles: UserRole[] }) 
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
 
-  const [idpConfig, setIdpConfig] = useState<IdpConfig | null>(null);
-  const [idpForm, setIdpForm] = useState<IdpConfig>(EMPTY_IDP);
-  const [idpEditing, setIdpEditing] = useState(false);
-  const [showPremiumPreview, setShowPremiumPreview] = useState(false);
-
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<RoleName>("Member");
   const [inviteSent, setInviteSent] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
-
-  const isPremium = showPremiumPreview;
 
   const fetchRoles = (token: string, signal?: AbortSignal) => {
     setRolesLoading(true);
@@ -312,22 +294,6 @@ export default function OrganizationDashboard({ roles }: { roles: UserRole[] }) 
     }
   }
 
-  function handleIdpSave() {
-    setIdpConfig({ ...idpForm });
-    setIdpEditing(false);
-  }
-
-  function handleIdpEdit() {
-    if (idpConfig) setIdpForm({ ...idpConfig });
-    setIdpEditing(true);
-  }
-
-  function handleIdpDelete() {
-    setIdpConfig(null);
-    setIdpForm(EMPTY_IDP);
-    setIdpEditing(false);
-  }
-
   const assignFiltered = employees.filter(
     (u) => !assignSearch || u.name.toLowerCase().includes(assignSearch.toLowerCase())
   );
@@ -337,15 +303,14 @@ export default function OrganizationDashboard({ roles }: { roles: UserRole[] }) 
       activeHref="/organization"
       eyebrow="Admin workspace"
       roles={roles}
-      title="Users, roles & settings"
+      title="Users and roles"
     >
       <section className="command-panel">
         <div>
           <p className="eyebrow">Management</p>
-          <h2>Manage access and commercial settings for the workspace.</h2>
+          <h2>Manage users and roles for the workspace.</h2>
           <p>
-            Configure user accounts, assign roles with granular permissions, and enable enterprise
-            add-ons from one place.
+            Configure user accounts and assign roles with granular permissions.
           </p>
         </div>
         <div className="action-cluster">
@@ -367,7 +332,6 @@ export default function OrganizationDashboard({ roles }: { roles: UserRole[] }) 
             type="button"
           >
             {tab.label}
-            {tab.paid && !isPremium && <span className="tab-paid-badge">Paid</span>}
           </button>
         ))}
       </nav>
@@ -574,150 +538,6 @@ export default function OrganizationDashboard({ roles }: { roles: UserRole[] }) 
               })}
             </div>
           </section>
-        </div>
-      )}
-
-      {/* ── Enterprise IdP ──────────────────────────────────────── */}
-      {activeTab === "enterprise-idp" && (
-        <div className="tab-content">
-          <div className="locked-feature-wrapper">
-            <div className={isPremium ? undefined : "locked-feature-content"}>
-              <section className="workspace-panel">
-                <div className="section-heading">
-                  <div>
-                    <p className="eyebrow">Single Sign-On · OIDC</p>
-                    <h2>Enterprise identity provider</h2>
-                  </div>
-                  <div className="action-cluster">
-                    {idpConfig && !idpEditing && (
-                      <>
-                        <button className="button button-secondary" type="button" onClick={handleIdpEdit}>
-                          Edit
-                        </button>
-                        <button
-                          className="button"
-                          type="button"
-                          style={{ background: "#fff5f5", border: "1px solid #fecaca", color: "#b91c1c" }}
-                          onClick={handleIdpDelete}
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
-                    {!idpConfig && !idpEditing && (
-                      <button className="button button-primary" type="button" onClick={() => setIdpEditing(true)}>
-                        Configure IdP
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {!idpConfig && !idpEditing && (
-                  <div className="idp-empty-state">
-                    <div className="idp-empty-icon">
-                      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                        <rect x="4" y="8" width="24" height="16" rx="3" stroke="currentColor" strokeWidth="1.8" />
-                        <circle cx="16" cy="16" r="4" stroke="currentColor" strokeWidth="1.6" />
-                        <path d="M10 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2" stroke="currentColor" strokeWidth="1.6" />
-                      </svg>
-                    </div>
-                    <h3>No identity provider configured</h3>
-                    <p>Connect an OIDC provider to enable enterprise SSO for your organization.</p>
-                    <button className="button button-primary" type="button" onClick={() => setIdpEditing(true)}>
-                      Configure OIDC provider
-                    </button>
-                  </div>
-                )}
-
-                {(idpEditing || idpConfig) && (
-                  <div style={{ marginTop: "18px", display: "grid", gap: "20px" }}>
-                    <div className="idp-form-grid">
-                      <label className="form-field-label">
-                        Client ID
-                        <input
-                          className="form-field-input"
-                          placeholder="your-client-id"
-                          type="text"
-                          readOnly={!idpEditing}
-                          value={idpEditing ? idpForm.clientId : (idpConfig?.clientId ?? "")}
-                          onChange={(e) => setIdpForm((f) => ({ ...f, clientId: e.target.value }))}
-                        />
-                      </label>
-                      <label className="form-field-label">
-                        Client Secret
-                        <input
-                          className="form-field-input"
-                          placeholder="••••••••••••••••"
-                          type={idpEditing ? "text" : "password"}
-                          readOnly={!idpEditing}
-                          value={idpEditing ? idpForm.clientSecret : (idpConfig?.clientSecret ?? "")}
-                          onChange={(e) => setIdpForm((f) => ({ ...f, clientSecret: e.target.value }))}
-                        />
-                      </label>
-                      <label className="form-field-label">
-                        Authorization Endpoint URL
-                        <input
-                          className="form-field-input"
-                          placeholder="https://idp.example.com/oauth2/authorize"
-                          type="url"
-                          readOnly={!idpEditing}
-                          value={idpEditing ? idpForm.authorizationEndpoint : (idpConfig?.authorizationEndpoint ?? "")}
-                          onChange={(e) => setIdpForm((f) => ({ ...f, authorizationEndpoint: e.target.value }))}
-                        />
-                      </label>
-                      <label className="form-field-label">
-                        Token Endpoint URL
-                        <input
-                          className="form-field-input"
-                          placeholder="https://idp.example.com/oauth2/token"
-                          type="url"
-                          readOnly={!idpEditing}
-                          value={idpEditing ? idpForm.tokenEndpoint : (idpConfig?.tokenEndpoint ?? "")}
-                          onChange={(e) => setIdpForm((f) => ({ ...f, tokenEndpoint: e.target.value }))}
-                        />
-                      </label>
-                      <label className="form-field-label" style={{ gridColumn: "1 / -1" }}>
-                        JWKS Endpoint
-                        <input
-                          className="form-field-input"
-                          placeholder="https://idp.example.com/oauth2/jwks"
-                          type="url"
-                          readOnly={!idpEditing}
-                          value={idpEditing ? idpForm.jwksEndpoint : (idpConfig?.jwksEndpoint ?? "")}
-                          onChange={(e) => setIdpForm((f) => ({ ...f, jwksEndpoint: e.target.value }))}
-                        />
-                      </label>
-                    </div>
-
-                    {idpEditing && (
-                      <div className="action-cluster">
-                        <button className="button button-primary" type="button" onClick={handleIdpSave}>
-                          Save configuration
-                        </button>
-                        <button className="button button-secondary" type="button" onClick={() => setIdpEditing(false)}>
-                          Cancel
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </section>
-            </div>
-
-            {!isPremium && (
-              <div className="locked-overlay">
-                <span className="locked-badge">Premium feature</span>
-                <h3>Enterprise SSO requires a Premium plan</h3>
-                <p>
-                  Connect your workforce IdP (Okta, Azure AD, Google Workspace) so employees sign
-                  in through your existing identity provider.
-                </p>
-                <button className="button button-primary" type="button" onClick={() => setShowPremiumPreview(true)}>
-                  Upgrade to Premium
-                </button>
-              </div>
-            )}
-          </div>
         </div>
       )}
 

@@ -12,6 +12,7 @@ import { UserRole } from "./lib/auth/utils";
 const adminNavItems = [
   { href: "/requests", label: "Travel policies", shortLabel: "P" },
   { href: "/organization", label: "Users and roles", shortLabel: "U" },
+  { href: "/enterprise-idp", label: "Enterprise IdP", shortLabel: "IdP" },
   { href: "/bookings", label: "Flight booking", shortLabel: "F" },
   { href: "/personalization", label: "Personalization", shortLabel: "Ps" },
   { href: "/billing", label: "Billing", shortLabel: "Bi" }
