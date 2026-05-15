@@ -5,7 +5,6 @@ import {
   CircleUserRound,
   LogOut,
   MessageCircle,
-  Plane,
   Send,
   ShieldCheck,
   X
@@ -24,8 +23,10 @@ import { BookingsUnavailable } from "./pages/BookingsUnavailable";
 import { FlightDetailsPage } from "./pages/FlightDetailsPage";
 import { HomePage, SignedInHomePage } from "./pages/HomePage";
 import { PaymentPageWithAuth } from "./pages/PaymentPageWithAuth";
+import { ProfilePageWithAuth } from "./pages/ProfilePageWithAuth";
 import { ResultsPage, ResultsPageWithAuth } from "./pages/ResultsPage";
 import { buildResultsPath, readCriteria } from "./utils/routes";
+import wayfinderLogo from "./assets/wayfinder-logo.png";
 
 const AGENT_CHAT_URL = import.meta.env.VITE_AGENT_CHAT_URL || "ws://localhost:8790/chat";
 const ASGARDEO_BASE_URL = import.meta.env.VITE_ASGARDEO_BASE_URL || "";
@@ -67,6 +68,16 @@ function createChatMessage(role, content) {
     role,
     content
   };
+}
+
+function BrandLogo({ className = "" }) {
+  return (
+    <img
+      className={`brand-logo${className ? ` ${className}` : ""}`}
+      src={wayfinderLogo}
+      alt="Wayfinder Travel logo"
+    />
+  );
 }
 
 function isFlightLandingPath(pathname) {
@@ -167,6 +178,10 @@ function LiveAuthHeader() {
         </button>
         {isAccountMenuOpen && (
           <div className="account-menu" role="menu">
+            <Link className="account-menu-item" to="/profile" role="menuitem">
+              <CircleUserRound size={18} />
+              <span>Profile</span>
+            </Link>
             <Link className="account-menu-item" to="/bookings" role="menuitem">
               <CircleUserRound size={18} />
               <span>My Bookings</span>
@@ -256,7 +271,7 @@ function SiteFooter({ authReady }) {
       <div>
         <Link className="brand footer-brand" to="/flights" aria-label="Wayfinder Travel home">
           <span className="brand-mark">
-            <Plane size={22} />
+            <BrandLogo />
           </span>
           <span>Wayfinder</span>
         </Link>
@@ -794,6 +809,10 @@ function AppRoutes({ authReady, cdsProfileId, criteria, locations, onSearch }) {
         path="/bookings"
         element={authReady ? <BookingsPageWithAuth /> : <BookingsUnavailable />}
       />
+      <Route
+        path="/profile"
+        element={authReady ? <ProfilePageWithAuth /> : <BookingsUnavailable />}
+      />
       <Route path="*" element={<Navigate to="/flights" replace />} />
     </Routes>
   );
@@ -870,7 +889,7 @@ function App({ authReady }) {
       <header className="site-header">
         <Link className="brand" to="/flights" aria-label="Wayfinder Travel home">
           <span className="brand-mark">
-            <Plane size={22} />
+            <BrandLogo />
           </span>
           <span>Wayfinder</span>
         </Link>

@@ -147,6 +147,190 @@ function normalizeOptionalTags(value) {
   return [];
 }
 
+function getBearerAccessToken(request: any) {
+  const authHeader = request.headers.authorization || "";
+
+  return authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+}
+
+function getAsgardeoBaseUrl() {
+  const baseUrl = process.env.ASGARDEO_BASE_URL;
+
+  if (!baseUrl) {
+    throw new Error("ASGARDEO_BASE_URL is required to update Asgardeo profiles");
+  }
+
+  return baseUrl.replace(/\/$/, "");
+}
+
+function getPrimaryScimEmail(scimUser: any) {
+  const emailValue = scimUser?.email || scimUser?.mail;
+
+  if (typeof emailValue === "string" && emailValue) {
+    return emailValue;
+  }
+
+  if (!Array.isArray(scimUser?.emails)) {
+    if (typeof scimUser?.emails === "string") {
+      return scimUser.emails;
+    }
+
+    if (scimUser?.emails && typeof scimUser.emails === "object") {
+      return scimUser.emails.value || scimUser.emails.display || "";
+    }
+
+    return "";
+  }
+
+  const primaryEmail = scimUser.emails.find((email: any) => email?.primary === true || email?.primary === "true");
+  const firstEmail = primaryEmail || scimUser.emails[0];
+
+  if (typeof firstEmail === "string") {
+    return firstEmail;
+  }
+
+  return firstEmail?.value || firstEmail?.display || "";
+}
+
+function getScimNameValue(scimUser: any, fieldName: string, fallbackFieldNames: string[]) {
+  const nameValue = scimUser?.name?.[fieldName];
+
+  if (nameValue) {
+    return nameValue;
+  }
+
+  for (const fallbackFieldName of fallbackFieldNames) {
+    if (scimUser?.[fallbackFieldName]) {
+      return scimUser[fallbackFieldName];
+    }
+  }
+
+  return "";
+}
+
+function mapScimProfile(scimUser: any) {
+  return {
+    firstName: getScimNameValue(scimUser, "givenName", ["given_name", "givenName"]),
+    lastName: getScimNameValue(scimUser, "familyName", ["family_name", "familyName"]),
+    username: scimUser?.userName || getPrimaryScimEmail(scimUser) || "",
+    email: getPrimaryScimEmail(scimUser),
+    memberSince: scimUser?.meta?.created || "",
+    raw: scimUser
+  };
+}
+
+async function fetchAsgardeoMeProfile(accessToken: string) {
+  const response = await fetch(`${getAsgardeoBaseUrl()}/scim2/Me`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/scim+json, application/json"
+    }
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.detail || data.description || data.error_description || data.error || "Failed to fetch Asgardeo profile");
+  }
+
+  return data;
+}
+
+async function handleProfileUpdate(request: any) {
+  const accessToken = getBearerAccessToken(request);
+
+  if (!accessToken) {
+    return {
+      statusCode: 401,
+      body: { error: "Missing bearer token" }
+    };
+  }
+
+  const body = await readJsonBody(request);
+  const firstName = typeof body.firstName === "string" ? body.firstName.trim() : "";
+  const lastName = typeof body.lastName === "string" ? body.lastName.trim() : "";
+  const email = typeof body.email === "string" ? body.email.trim() : "";
+  const operations: any[] = [
+    {
+      op: "replace",
+      path: "name",
+      value: {
+        givenName: firstName,
+        familyName: lastName
+      }
+    }
+  ];
+
+  if (email) {
+    operations.push({
+      op: "replace",
+      path: "emails",
+      value: [
+        {
+          value: email,
+          type: "work",
+          primary: true
+        }
+      ]
+    });
+  }
+
+  const patchResponse = await fetch(`${getAsgardeoBaseUrl()}/scim2/Me`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/scim+json",
+      Accept: "application/scim+json, application/json"
+    },
+    body: JSON.stringify({
+      schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+      Operations: operations
+    })
+  });
+  const patchData = await patchResponse.json().catch(() => ({}));
+
+  if (!patchResponse.ok) {
+    return {
+      statusCode: patchResponse.status,
+      body: {
+        error:
+          patchData.detail ||
+          patchData.description ||
+          patchData.error_description ||
+          patchData.error ||
+          "Failed to update Asgardeo profile"
+      }
+    };
+  }
+
+  const updatedProfile = patchResponse.status === 204 || !Object.keys(patchData).length
+    ? await fetchAsgardeoMeProfile(accessToken)
+    : patchData;
+
+  return {
+    statusCode: 200,
+    body: { data: mapScimProfile(updatedProfile) }
+  };
+}
+
+async function handleProfileFetch(request: any) {
+  const accessToken = getBearerAccessToken(request);
+
+  if (!accessToken) {
+    return {
+      statusCode: 401,
+      body: { error: "Missing bearer token" }
+    };
+  }
+
+  const profile = await fetchAsgardeoMeProfile(accessToken);
+
+  return {
+    statusCode: 200,
+    body: { data: mapScimProfile(profile) }
+  };
+}
+
 async function notifyAgentOfDealMatches(flight, matches) {
   if (!matches.length) {
     return;
@@ -561,6 +745,18 @@ async function route(request, response) {
       const user = await resolveUser(request);
 
       return sendJson(response, 200, { data: user });
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/me/profile") {
+      const result = await handleProfileFetch(request);
+
+      return sendJson(response, result.statusCode, result.body);
+    }
+
+    if (request.method === "PATCH" && url.pathname === "/api/me/profile") {
+      const result = await handleProfileUpdate(request);
+
+      return sendJson(response, result.statusCode, result.body);
     }
 
     if (request.method === "GET" && url.pathname === "/api/bookings/flights") {

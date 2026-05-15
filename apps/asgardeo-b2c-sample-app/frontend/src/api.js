@@ -140,3 +140,27 @@ export async function cancelBooking(bookingId, accessToken, user) {
 
   return response.data;
 }
+
+export async function getProfile(accessToken, user) {
+  const response = await requestJson("/api/me/profile", {
+    headers: {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...getUserHeaders(user)
+    }
+  });
+
+  return response.data;
+}
+
+export async function updateProfile(profile, accessToken, user) {
+  const response = await requestJson("/api/me/profile", {
+    method: "PATCH",
+    headers: {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...getUserHeaders(user)
+    },
+    body: JSON.stringify(profile)
+  });
+
+  return response.data;
+}

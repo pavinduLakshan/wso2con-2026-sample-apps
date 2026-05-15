@@ -44,6 +44,8 @@ POST /api/deal-alert-consents
 POST /api/deal-alert-consents/transfer
 GET  /api/deal-alert-consents/:username
 GET  /api/me
+GET  /api/me/profile
+PATCH /api/me/profile
 ```
 
 OpenAPI documentation is available in:
@@ -106,6 +108,8 @@ Protected endpoints:
 POST /api/bookings
 GET  /api/bookings/flights
 GET  /api/me
+GET  /api/me/profile
+PATCH /api/me/profile
 PATCH /api/bookings/:bookingId/price
 PATCH /api/bookings/:bookingId/cancel
 ```

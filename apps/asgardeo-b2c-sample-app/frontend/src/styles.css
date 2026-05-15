@@ -2,8 +2,9 @@
   color: #111827;
   background: #ffffff;
   font-family:
-    Aptos, "Avenir Next", "SF Pro Text", "Helvetica Neue", ui-sans-serif,
-    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    Inter, Aptos, "Avenir Next", "SF Pro Text", "Helvetica Neue",
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -147,8 +148,17 @@ a {
   height: 40px;
   place-items: center;
   color: #ffffff;
-  background: #2563eb;
+  background: #ffffff;
+  border: 1px solid rgba(17, 24, 39, 0.08);
   border-radius: 8px;
+  overflow: hidden;
+}
+
+.brand-logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .auth-cluster {
@@ -1180,7 +1190,7 @@ h1 {
 .booking-flight-widget {
   --booking-route-code-size: clamp(1.7rem, 4vw, 3rem);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(200px, 260px);
+  grid-template-columns: minmax(0, 1fr);
   overflow: hidden;
   background: #ffffff;
   border: 1px solid rgba(17, 24, 39, 0.1);
@@ -1277,6 +1287,219 @@ h1 {
   display: block;
   width: 100%;
   height: auto;
+}
+
+.profile-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  gap: 18px;
+  width: min(980px, calc(100% - 40px));
+  margin: 22px auto 0;
+}
+
+.profile-card,
+.membership-id-panel {
+  background: #ffffff;
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 18px 48px rgba(17, 24, 39, 0.08);
+}
+
+.profile-card {
+  display: grid;
+  gap: 22px;
+  padding: 24px;
+}
+
+.profile-card-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+}
+
+.profile-avatar {
+  display: grid;
+  width: 68px;
+  height: 68px;
+  place-items: center;
+  color: #2563eb;
+  background: #eff6ff;
+  border-radius: 8px;
+}
+
+.profile-card-header span,
+.profile-edit-form label span {
+  color: #2563eb;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.profile-card-header h2 {
+  margin: 3px 0 2px;
+  color: #111827;
+  font-size: 1.35rem;
+}
+
+.profile-card-header p {
+  margin: 0;
+  color: #5b6574;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.profile-details dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+}
+
+.profile-details dl div {
+  display: grid;
+  gap: 4px;
+}
+
+.profile-details dt {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.profile-details dd {
+  margin: 0;
+  color: #111827;
+  font-size: 1rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.profile-edit-form {
+  display: grid;
+  gap: 14px;
+}
+
+.profile-edit-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.profile-edit-form input {
+  min-height: 44px;
+  width: 100%;
+  padding: 0 12px;
+  color: #111827;
+  background: #f9fafb;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+}
+
+.profile-edit-form input:focus {
+  outline: 3px solid rgba(37, 99, 235, 0.16);
+  border-color: #2563eb;
+}
+
+.profile-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.profile-edit-button,
+.profile-primary-button,
+.profile-secondary-button {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 700;
+}
+
+.profile-edit-button,
+.profile-secondary-button {
+  color: #2563eb;
+  background: #ffffff;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+}
+
+.profile-primary-button {
+  color: #ffffff;
+  background: #2563eb;
+  border: 1px solid #2563eb;
+}
+
+.profile-edit-button:hover,
+.profile-secondary-button:hover {
+  background: #eff6ff;
+}
+
+.profile-primary-button:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.profile-edit-button:disabled,
+.profile-primary-button:disabled,
+.profile-secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.membership-id-panel {
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  align-content: start;
+  padding: 24px;
+  text-align: center;
+}
+
+.membership-id-heading {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-self: stretch;
+  text-align: left;
+}
+
+.membership-id-heading svg {
+  color: #2563eb;
+}
+
+.membership-id-heading span {
+  color: #2563eb;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.membership-id-heading h2 {
+  margin: 2px 0 0;
+  color: #111827;
+  font-size: 1.05rem;
+}
+
+.membership-id-panel p {
+  max-width: 240px;
+  margin: 0;
+  color: #5b6574;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.membership-qr-frame {
+  width: min(210px, 100%);
+  border-color: #eff6ff;
 }
 
 .booking-itinerary-card,
@@ -1565,6 +1788,38 @@ h1 {
   border-radius: 8px;
 }
 
+.booking-cancel-confirmation {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+}
+
+.booking-cancel-confirmation strong {
+  display: block;
+  color: #7f1d1d;
+  font-size: 1rem;
+}
+
+.booking-cancel-confirmation p {
+  max-width: none;
+  margin-top: 4px;
+  color: #7c2d12;
+  font-weight: 500;
+}
+
+.booking-cancel-confirmation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .travel-insurance-icon {
   display: grid;
   width: 54px;
@@ -1613,10 +1868,10 @@ h1 {
 }
 
 .travel-insurance-button,
-.booking-cancel-button {
+.booking-cancel-button,
+.booking-cancel-secondary-button {
   min-height: 44px;
   padding: 0 16px;
-  border: 0;
   border-radius: 8px;
   font-weight: 700;
   white-space: nowrap;
@@ -1630,11 +1885,20 @@ h1 {
 .booking-cancel-button {
   color: #ffffff;
   background: #b91c1c;
+  border: 0;
 }
 
-.booking-cancel-button:disabled {
+.booking-cancel-secondary-button {
+  color: #7f1d1d;
+  background: #ffffff;
+  border: 1px solid #fecaca;
+}
+
+.booking-cancel-button:disabled,
+.booking-cancel-secondary-button:disabled {
   color: #6b7280;
   background: #e5e7eb;
+  border-color: #e5e7eb;
   cursor: not-allowed;
 }
 
@@ -2644,7 +2908,6 @@ h2 {
 
   .booking-flight-widget {
     --booking-route-code-size: clamp(1.35rem, 4vw, 2.2rem);
-    grid-template-columns: minmax(0, 1fr) minmax(150px, 180px);
   }
 
   .booking-flight-widget .itinerary-route {
@@ -2901,13 +3164,40 @@ h2 {
     margin-left: 16px;
   }
 
+  .profile-panel {
+    grid-template-columns: 1fr;
+  }
+
   .booking-flight-widget {
     --booking-route-code-size: clamp(1.05rem, 6vw, 1.45rem);
-    grid-template-columns: minmax(0, 1fr) 116px;
   }
 
   .booking-flight-main {
     padding: 16px;
+  }
+
+  .profile-card {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-card-header {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-details dl {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-edit-actions {
+    justify-content: stretch;
+  }
+
+  .profile-edit-actions button {
+    flex: 1 1 160px;
+  }
+
+  .profile-panel {
+    width: calc(100% - 32px);
   }
 
   .booking-flight-widget .booking-detail-topline {

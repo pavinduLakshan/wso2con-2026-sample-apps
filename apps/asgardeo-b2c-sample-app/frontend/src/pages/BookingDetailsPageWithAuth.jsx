@@ -6,13 +6,12 @@ import { cancelBooking, getBookedFlights } from "../api";
 import { createSignInConfigWithCDSTracker } from "../cds-api";
 import { formatPrice, getBookingReference } from "../utils/bookings";
 
-const walletCredentialOffer = import.meta.env.VITE_WALLET_CREDENTIAL_OFFER || "";
-
 export function BookingDetailsPageWithAuth({ bookingId }) {
   const { getAccessToken, isSignedIn, signIn, user } = useAsgardeo();
   const [booking, setBooking] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
+  const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const userKey = user?.sub || user?.username || user?.userName || user?.email || "signed-in";
@@ -67,12 +66,6 @@ export function BookingDetailsPageWithAuth({ bookingId }) {
       return;
     }
 
-    const shouldCancel = window.confirm(`Cancel booking ${getBookingReference(booking)}?`);
-
-    if (!shouldCancel) {
-      return;
-    }
-
     setIsCanceling(true);
     setError("");
     setStatusMessage("");
@@ -82,6 +75,7 @@ export function BookingDetailsPageWithAuth({ bookingId }) {
       const updatedBooking = await cancelBooking(booking.id, accessToken, user);
 
       setBooking(updatedBooking);
+      setIsCancelConfirmOpen(false);
       setStatusMessage("Booking canceled.");
     } catch (requestError) {
       setError(requestError.message);
@@ -170,16 +164,6 @@ export function BookingDetailsPageWithAuth({ bookingId }) {
                 <span>{booking.flight.cabin}</span>
               </div>
             </div>
-            <aside className="wallet-qr-panel" aria-label="Wallet QR code">
-              <span>Add to wallet</span>
-              <div className="wallet-qr-frame">
-                <img
-                  alt="QR code for adding this booking to a wallet"
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(walletCredentialOffer)}`}
-                />
-              </div>
-              <p>Scan with a compatible wallet app.</p>
-            </aside>
           </div>
 
           <div className="booking-detail-sections booking-confirmed-sections">
@@ -247,11 +231,37 @@ export function BookingDetailsPageWithAuth({ bookingId }) {
               <button
                 className="booking-cancel-button"
                 type="button"
-                disabled={isCanceling}
-                onClick={handleCancelBooking}
+                disabled={isCanceling || isCancelConfirmOpen}
+                onClick={() => setIsCancelConfirmOpen(true)}
               >
-                {isCanceling ? "Canceling..." : "Cancel booking"}
+                Cancel booking
               </button>
+              {isCancelConfirmOpen && (
+                <div className="booking-cancel-confirmation" role="alertdialog" aria-modal="false">
+                  <div>
+                    <strong>Cancel booking {getBookingReference(booking)}?</strong>
+                    <p>This will mark the booking as canceled and turn off better-deal alerts for this trip.</p>
+                  </div>
+                  <div className="booking-cancel-confirmation-actions">
+                    <button
+                      className="booking-cancel-secondary-button"
+                      type="button"
+                      disabled={isCanceling}
+                      onClick={() => setIsCancelConfirmOpen(false)}
+                    >
+                      Keep booking
+                    </button>
+                    <button
+                      className="booking-cancel-button"
+                      type="button"
+                      disabled={isCanceling}
+                      onClick={handleCancelBooking}
+                    >
+                      {isCanceling ? "Canceling..." : "Confirm cancellation"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </section>
           )}
 
