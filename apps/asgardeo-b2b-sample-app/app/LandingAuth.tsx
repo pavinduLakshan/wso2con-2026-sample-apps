@@ -52,7 +52,7 @@ export function LandingHeader() {
                 {email ? <span>{email}</span> : null}
               </span>
             </div>
-            <Link className="button button-secondary" href="/dashboard">
+            <Link className="button button-secondary" href="/requests">
               Dashboard
             </Link>
             <button className="button button-ghost" onClick={signOut} type="button">
@@ -86,7 +86,7 @@ export function LandingHeroCopy() {
           Your travel workspace is ready for today&apos;s requests, approvals, policy checks, and spend reviews.
         </p>
         <div className="hero-actions">
-          <Link className="button button-primary" href="/dashboard">
+          <Link className="button button-primary" href="/requests">
             Open workspace
           </Link>
           <Link className="button button-secondary" href="/bookings">

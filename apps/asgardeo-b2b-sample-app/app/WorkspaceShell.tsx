@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useAuth } from "./lib/auth/client";
 import AdminSidebar from "./AdminSidebar";
 import ImpersonationBanner from "./ImpersonationBanner";
+import LoadingScreen from "./LoadingScreen";
 import WorkspaceLoader from "./WorkspaceLoader";
 import { UserRole } from "./lib/auth/utils";
 
@@ -43,6 +44,12 @@ export default function WorkspaceShell({
   role: UserRole;
   title: string;
 }>) {
+  const { isLoading: authLoading } = useAuth();
+
+  if (authLoading) {
+    return <LoadingScreen description="Please wait while we set up your workspace." steps={[]} title="Loading your workspace…" />;
+  }
+
   if (role !== UserRole.ADMIN) {
     return (
       <main className="member-shell">
