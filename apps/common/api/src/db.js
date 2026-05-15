@@ -30,12 +30,21 @@ function ensureSchema(database) {
       username TEXT NOT NULL,
       route_from TEXT NOT NULL,
       route_to TEXT NOT NULL,
+      criteria_json TEXT NOT NULL DEFAULT '{}',
       enabled INTEGER NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       UNIQUE (booking_id, username),
-      FOREIGN KEY (booking_id) REFERENCES bookings(id)
+      FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
     );
+
+    CREATE TRIGGER IF NOT EXISTS delete_deal_alert_consents_after_booking_delete
+    AFTER DELETE ON bookings
+    FOR EACH ROW
+    BEGIN
+      DELETE FROM deal_alert_consents
+      WHERE booking_id = OLD.id;
+    END;
   `);
 
   const bookingColumns = database.prepare("PRAGMA table_info(bookings)").all();
@@ -49,6 +58,15 @@ function ensureSchema(database) {
   if (!hasBookingPrice) {
     database.exec("ALTER TABLE bookings ADD COLUMN booking_price REAL;");
   }
+
+  const dealAlertColumns = database.prepare("PRAGMA table_info(deal_alert_consents)").all();
+  const hasCriteriaJson = dealAlertColumns.some((column) => column.name === "criteria_json");
+
+  if (!hasCriteriaJson) {
+    database.exec("ALTER TABLE deal_alert_consents ADD COLUMN criteria_json TEXT NOT NULL DEFAULT '{}';");
+  }
+
+  ensureDealAlertConsentCascade(database);
 
   const bookingsWithoutReference = database
     .prepare("SELECT id FROM bookings WHERE booking_reference IS NULL OR booking_reference = ''")
@@ -80,6 +98,76 @@ function ensureSchema(database) {
   `);
 }
 
+function ensureDealAlertConsentCascade(database) {
+  const foreignKeys = database.prepare("PRAGMA foreign_key_list(deal_alert_consents)").all();
+  const hasBookingCascade = foreignKeys.some((foreignKey) => (
+    foreignKey.table === "bookings" &&
+    foreignKey.from === "booking_id" &&
+    String(foreignKey.on_delete).toUpperCase() === "CASCADE"
+  ));
+
+  if (hasBookingCascade) {
+    return;
+  }
+
+  database.pragma("foreign_keys = OFF");
+
+  const migrateDealAlerts = database.transaction(() => {
+    database.exec(`
+      CREATE TABLE deal_alert_consents_new (
+        id TEXT PRIMARY KEY,
+        booking_id TEXT NOT NULL,
+        username TEXT NOT NULL,
+        route_from TEXT NOT NULL,
+        route_to TEXT NOT NULL,
+        criteria_json TEXT NOT NULL DEFAULT '{}',
+        enabled INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (booking_id, username),
+        FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+      );
+
+      INSERT INTO deal_alert_consents_new (
+        id,
+        booking_id,
+        username,
+        route_from,
+        route_to,
+        criteria_json,
+        enabled,
+        created_at,
+        updated_at
+      )
+      SELECT
+        id,
+        booking_id,
+        username,
+        route_from,
+        route_to,
+        criteria_json,
+        enabled,
+        created_at,
+        updated_at
+      FROM deal_alert_consents
+      WHERE EXISTS (
+        SELECT 1
+        FROM bookings
+        WHERE bookings.id = deal_alert_consents.booking_id
+      );
+
+      DROP TABLE deal_alert_consents;
+      ALTER TABLE deal_alert_consents_new RENAME TO deal_alert_consents;
+    `);
+  });
+
+  try {
+    migrateDealAlerts();
+  } finally {
+    database.pragma("foreign_keys = ON");
+  }
+}
+
 function getDatabase() {
   if (!existsSync(dbPath)) {
     throw new Error("SQLite database not found. Run `npm run seed` from the api directory.");
@@ -87,7 +175,9 @@ function getDatabase() {
 
   if (!db) {
     db = new Database(dbPath);
+    db.pragma("foreign_keys = ON");
     ensureSchema(db);
+    db.pragma("foreign_keys = ON");
   }
 
   return db;
@@ -99,6 +189,28 @@ function parseJsonArray(value) {
   } catch {
     return [];
   }
+}
+
+function parseJsonObject(value) {
+  try {
+    const parsed = JSON.parse(value || "{}");
+
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function parseFlightStartDate(value) {
+  const match = String(value || "").match(/\b([A-Za-z]{3,9})\s+(\d{1,2})\b/);
+
+  if (!match) {
+    return null;
+  }
+
+  const parsed = Date.parse(`${match[1]} ${match[2]}, 2026 00:00:00 UTC`);
+
+  return Number.isNaN(parsed) ? null : parsed;
 }
 
 function mapFlight(row) {
@@ -177,6 +289,105 @@ export function findFlightById(id) {
     .get({ id });
 
   return row ? mapFlight(row) : null;
+}
+
+export function createFlightRecord({
+  id,
+  from,
+  to,
+  airline,
+  departureTime,
+  arrivalTime,
+  duration,
+  stops,
+  price,
+  currency,
+  cabin,
+  dates,
+  tags
+}) {
+  getDatabase()
+    .prepare(
+      `
+        INSERT INTO flights (
+          id,
+          from_city,
+          to_city,
+          airline,
+          departure_time,
+          arrival_time,
+          duration,
+          stops,
+          price,
+          currency,
+          cabin,
+          dates,
+          tags
+        ) VALUES (
+          @id,
+          @from,
+          @to,
+          @airline,
+          @departureTime,
+          @arrivalTime,
+          @duration,
+          @stops,
+          @price,
+          @currency,
+          @cabin,
+          @dates,
+          @tags
+        )
+      `
+    )
+    .run({
+      id,
+      from,
+      to,
+      airline,
+      departureTime,
+      arrivalTime,
+      duration,
+      stops,
+      price,
+      currency,
+      cabin,
+      dates,
+      tags: JSON.stringify(Array.isArray(tags) ? tags : [])
+    });
+
+  return findFlightById(id);
+}
+
+export function deleteFlightById(id) {
+  const database = getDatabase();
+  const flight = findFlightById(id);
+
+  if (!flight) {
+    return { deleted: false, reason: "not-found" };
+  }
+
+  const bookingCount = database
+    .prepare("SELECT COUNT(*) AS count FROM bookings WHERE type = 'flight' AND item_id = @id")
+    .get({ id }).count;
+  const tripCount = database
+    .prepare("SELECT COUNT(*) AS count FROM trips WHERE flight_id = @id")
+    .get({ id }).count;
+
+  if (bookingCount > 0 || tripCount > 0) {
+    return {
+      deleted: false,
+      reason: "in-use",
+      bookingCount,
+      tripCount
+    };
+  }
+
+  database
+    .prepare("DELETE FROM flights WHERE id = @id")
+    .run({ id });
+
+  return { deleted: true, flight };
 }
 
 export function findHotels({ location, maxNightlyRate }) {
@@ -455,7 +666,7 @@ export function updateBookedFlightPrice({ bookingId, username, price }) {
   return getBookedFlightById(bookingId);
 }
 
-export function cancelBookedFlight({ bookingId, username }) {
+export function cancelBookedFlight({ bookingId, username, disableDealAlerts = true }) {
   const booking = getBookedFlightById(bookingId);
 
   if (!booking) {
@@ -482,24 +693,106 @@ export function cancelBookedFlight({ bookingId, username }) {
       )
       .run({ bookingId });
 
-    getDatabase()
-      .prepare(
-        `
-          UPDATE deal_alert_consents
-          SET enabled = 0,
-              updated_at = @updatedAt
-          WHERE booking_id = @bookingId
-        `
-      )
-      .run({
-        bookingId,
-        updatedAt: new Date().toISOString()
-      });
+    if (disableDealAlerts) {
+      getDatabase()
+        .prepare(
+          `
+            UPDATE deal_alert_consents
+            SET enabled = 0,
+                updated_at = @updatedAt
+            WHERE booking_id = @bookingId
+          `
+        )
+        .run({
+          bookingId,
+          updatedAt: new Date().toISOString()
+        });
+    }
   });
 
   cancelBooking();
 
   return getBookedFlightById(bookingId);
+}
+
+export function transferDealAlertConsentBooking({
+  fromBookingId,
+  toBookingId,
+  username,
+  now
+}) {
+  const fromBooking = getBookedFlightById(fromBookingId);
+  const toBooking = getBookedFlightById(toBookingId);
+
+  if (!fromBooking || !toBooking) {
+    return null;
+  }
+
+  if (username && (fromBooking.username !== username || toBooking.username !== username)) {
+    return null;
+  }
+
+  const existingTargetConsent = getDatabase()
+    .prepare(
+      `
+        SELECT id
+        FROM deal_alert_consents
+        WHERE booking_id = @toBookingId
+          AND username = @username
+        LIMIT 1
+      `
+    )
+    .get({ toBookingId, username: fromBooking.username });
+
+  const transferConsent = getDatabase().transaction(() => {
+    if (existingTargetConsent) {
+      getDatabase()
+        .prepare(
+          `
+            DELETE FROM deal_alert_consents
+            WHERE booking_id = @fromBookingId
+              AND username = @username
+          `
+        )
+        .run({ fromBookingId, username: fromBooking.username });
+
+      getDatabase()
+        .prepare(
+          `
+            UPDATE deal_alert_consents
+            SET enabled = 1,
+                updated_at = @updatedAt
+            WHERE booking_id = @toBookingId
+              AND username = @username
+          `
+        )
+        .run({ toBookingId, username: fromBooking.username, updatedAt: now });
+
+      return;
+    }
+
+    getDatabase()
+      .prepare(
+        `
+          UPDATE deal_alert_consents
+          SET booking_id = @toBookingId,
+              enabled = 1,
+              updated_at = @updatedAt
+          WHERE booking_id = @fromBookingId
+            AND username = @username
+        `
+      )
+      .run({
+        fromBookingId,
+        toBookingId,
+        username: fromBooking.username,
+        updatedAt: now
+      });
+  });
+
+  transferConsent();
+
+  return getDealAlertConsent({ bookingId: toBookingId, username: fromBooking.username });
 }
 
 export function upsertDealAlertConsent({
@@ -508,6 +801,7 @@ export function upsertDealAlertConsent({
   username,
   routeFrom,
   routeTo,
+  criteria,
   enabled,
   now
 }) {
@@ -535,6 +829,7 @@ export function upsertDealAlertConsent({
           username,
           route_from,
           route_to,
+          criteria_json,
           enabled,
           created_at,
           updated_at
@@ -544,6 +839,7 @@ export function upsertDealAlertConsent({
           @username,
           @routeFrom,
           @routeTo,
+          @criteriaJson,
           @enabled,
           @createdAt,
           @updatedAt
@@ -551,6 +847,7 @@ export function upsertDealAlertConsent({
         ON CONFLICT(booking_id, username) DO UPDATE SET
           route_from = excluded.route_from,
           route_to = excluded.route_to,
+          criteria_json = excluded.criteria_json,
           enabled = excluded.enabled,
           updated_at = excluded.updated_at
       `
@@ -561,6 +858,7 @@ export function upsertDealAlertConsent({
       username,
       routeFrom,
       routeTo,
+      criteriaJson: JSON.stringify(criteria && typeof criteria === "object" ? criteria : {}),
       enabled: enabled ? 1 : 0,
       createdAt,
       updatedAt: now
@@ -615,6 +913,110 @@ export function listEnabledDealAlertConsents(username) {
   }));
 }
 
+function criteriaMatchesFlight(criteria, currentBooking, newFlight) {
+  const minimumSavingsPercent = Number(criteria.minimumSavingsPercent ?? 0);
+  const maxStopsValue = criteria.maxStops;
+  const maxStops = maxStopsValue === null || maxStopsValue === undefined || maxStopsValue === ""
+    ? null
+    : Number(maxStopsValue);
+  const datePreference = String(criteria.datePreference || "any");
+  const sameCabinOnly = Boolean(criteria.sameCabinOnly);
+  const currentPrice = Number(currentBooking.booking_price ?? currentBooking.flight_price);
+  const newPrice = Number(newFlight.price);
+
+  if (!Number.isFinite(currentPrice) || !Number.isFinite(newPrice) || newPrice >= currentPrice) {
+    return false;
+  }
+
+  if (Number.isFinite(minimumSavingsPercent) && minimumSavingsPercent > 0) {
+    const savingsPercent = ((currentPrice - newPrice) / currentPrice) * 100;
+
+    if (savingsPercent < minimumSavingsPercent) {
+      return false;
+    }
+  }
+
+  if (Number.isFinite(maxStops) && Number(newFlight.stops) > maxStops) {
+    return false;
+  }
+
+  if (sameCabinOnly && String(newFlight.cabin).toLowerCase() !== String(currentBooking.cabin).toLowerCase()) {
+    return false;
+  }
+
+  if (datePreference === "earlier" || datePreference === "later") {
+    const currentDate = parseFlightStartDate(currentBooking.dates);
+    const newDate = parseFlightStartDate(newFlight.dates);
+
+    if (currentDate === null || newDate === null) {
+      return false;
+    }
+
+    if (datePreference === "earlier" && newDate >= currentDate) {
+      return false;
+    }
+
+    if (datePreference === "later" && newDate <= currentDate) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+export function listMatchingDealAlertConsentsForFlight(flightId) {
+  const newFlight = findFlightById(flightId);
+
+  if (!newFlight) {
+    return [];
+  }
+
+  const rows = getDatabase()
+    .prepare(
+      `
+        SELECT
+          deal_alert_consents.*,
+          bookings.user_id,
+          bookings.travelers,
+          bookings.booking_price,
+          flights.price AS flight_price,
+          flights.currency,
+          flights.cabin,
+          flights.dates
+        FROM deal_alert_consents
+        INNER JOIN bookings ON deal_alert_consents.booking_id = bookings.id
+        INNER JOIN flights ON bookings.item_id = flights.id
+        WHERE deal_alert_consents.enabled = 1
+          AND bookings.type = 'flight'
+          AND bookings.status != 'canceled'
+          AND LOWER(deal_alert_consents.route_from) = LOWER(@routeFrom)
+          AND LOWER(deal_alert_consents.route_to) = LOWER(@routeTo)
+      `
+    )
+    .all({
+      routeFrom: newFlight.from,
+      routeTo: newFlight.to
+    });
+
+  return rows
+    .map((row) => ({
+      consent: mapDealAlertConsent(row),
+      currentPrice: row.booking_price ?? row.flight_price,
+      currentCabin: row.cabin,
+      currentDates: row.dates,
+      currency: row.currency,
+      travelers: row.travelers,
+      userId: row.user_id,
+      newFlight
+    }))
+    .filter((match) => criteriaMatchesFlight(match.consent.criteria, {
+      booking_price: match.currentPrice,
+      flight_price: match.currentPrice,
+      cabin: match.currentCabin,
+      dates: match.currentDates
+    }, newFlight));
+}
+
 function mapDealAlertConsent(row) {
   return {
     id: row.id,
@@ -622,6 +1024,7 @@ function mapDealAlertConsent(row) {
     username: row.username,
     routeFrom: row.route_from,
     routeTo: row.route_to,
+    criteria: parseJsonObject(row.criteria_json),
     enabled: Boolean(row.enabled),
     createdAt: row.created_at,
     updatedAt: row.updated_at

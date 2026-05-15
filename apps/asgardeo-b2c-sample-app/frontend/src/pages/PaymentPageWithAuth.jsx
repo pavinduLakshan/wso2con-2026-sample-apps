@@ -80,7 +80,10 @@ export function PaymentPageWithAuth({ criteria, flightId }) {
           bookingId: booking.id,
           username: username || booking.username,
           routeFrom: flight.from,
-          routeTo: flight.to
+          routeTo: flight.to,
+          currentPrice: flight.price,
+          currentStops: flight.stops,
+          cabin: flight.cabin
         }
       }));
       navigate(`/bookings/${encodeURIComponent(booking.id)}`);

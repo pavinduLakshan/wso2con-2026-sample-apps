@@ -33,6 +33,12 @@ const ASGARDEO_ORG_NAME = getAsgardeoOrgName();
 const SIGN_UP_URL = ASGARDEO_ORG_NAME
   ? `https://accounts.asgardeo.io/t/${encodeURIComponent(ASGARDEO_ORG_NAME)}/accounts/register`
   : "https://accounts.asgardeo.io/accounts/register";
+const DEFAULT_DEAL_ALERT_CRITERIA = {
+  minimumSavingsPercent: 10,
+  maxStops: null,
+  datePreference: "any",
+  sameCabinOnly: true
+};
 
 function getAsgardeoOrgName() {
   const configuredOrgName = import.meta.env.VITE_ASGARDEO_ORG_NAME?.trim();
@@ -63,10 +69,8 @@ function createChatMessage(role, content) {
   };
 }
 
-function hasAsgardeoCallbackParams(search) {
-  const params = new URLSearchParams(search);
-
-  return Boolean((params.get("code") && params.get("state")) || params.get("error"));
+function isFlightLandingPath(pathname) {
+  return pathname === "/" || pathname === "/flights";
 }
 
 function AuthenticatedHeader({ authReady }) {
@@ -270,6 +274,7 @@ function ChatWidget() {
     createChatMessage("assistant", "Hi, I can help with travel questions and booking details.")
   ]);
   const [dealAlertRequest, setDealAlertRequest] = useState(null);
+  const [dealAlertCriteria, setDealAlertCriteria] = useState(DEFAULT_DEAL_ALERT_CRITERIA);
   const [draft, setDraft] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const socketRef = useRef(null);
@@ -387,13 +392,19 @@ function ChatWidget() {
         return;
       }
 
+      const defaultMaxStops = Number.isInteger(request.currentStops) ? request.currentStops : null;
+
       setDealAlertRequest(request);
+      setDealAlertCriteria({
+        ...DEFAULT_DEAL_ALERT_CRITERIA,
+        maxStops: defaultMaxStops
+      });
       setIsOpen(true);
       setMessages((current) => [
         ...current,
         createChatMessage(
           "assistant",
-          `Would you like offline alerts when I find a better deal for ${request.routeFrom} to ${request.routeTo}?`
+          `Want me to watch for a better deal for ${request.routeFrom} to ${request.routeTo}? Pick the criteria I should use.`
         )
       ]);
     }
@@ -425,6 +436,7 @@ function ChatWidget() {
     }
 
     const request = dealAlertRequest;
+    const criteria = enabled ? dealAlertCriteria : {};
     setDealAlertRequest(null);
     sendAgentMessage(
       [
@@ -433,10 +445,22 @@ function ChatWidget() {
         `username: ${request.username}`,
         `routeFrom: ${request.routeFrom}`,
         `routeTo: ${request.routeTo}`,
+        `criteria: ${JSON.stringify(criteria)}`,
+        `minimumSavingsPercent: ${criteria.minimumSavingsPercent ?? ""}`,
+        `maxStops: ${criteria.maxStops ?? ""}`,
+        `datePreference: ${criteria.datePreference ?? ""}`,
+        `sameCabinOnly: ${criteria.sameCabinOnly ?? ""}`,
         `enabled: ${enabled}`,
       ].join("\n"),
-      enabled ? "Yes, send me better-deal alerts." : "No, do not send better-deal alerts."
+      enabled ? "Watch for better deals with these criteria." : "No, do not send better-deal alerts."
     );
+  }
+
+  function updateDealAlertCriteria(updates) {
+    setDealAlertCriteria((current) => ({
+      ...current,
+      ...updates
+    }));
   }
 
   function handleSubmit(event) {
@@ -481,13 +505,76 @@ function ChatWidget() {
               </div>
             ))}
             {dealAlertRequest && (
-              <div className="chat-choice-row" aria-label="Offline deal alert choices">
-                <button type="button" onClick={() => handleDealAlertChoice(true)}>
-                  Yes
-                </button>
-                <button type="button" onClick={() => handleDealAlertChoice(false)}>
-                  No
-                </button>
+              <div className="chat-criteria-card" aria-label="Better-deal alert criteria">
+                <label className="chat-criteria-field">
+                  <span>Minimum savings</span>
+                  <select
+                    value={dealAlertCriteria.minimumSavingsPercent}
+                    onChange={(event) => updateDealAlertCriteria({
+                      minimumSavingsPercent: Number(event.target.value)
+                    })}
+                  >
+                    <option value={5}>5% or more</option>
+                    <option value={10}>10% or more</option>
+                    <option value={15}>15% or more</option>
+                    <option value={20}>20% or more</option>
+                  </select>
+                </label>
+                <label className="chat-criteria-field">
+                  <span>Maximum stops</span>
+                  <select
+                    value={dealAlertCriteria.maxStops ?? "any"}
+                    onChange={(event) => updateDealAlertCriteria({
+                      maxStops: event.target.value === "any" ? null : Number(event.target.value)
+                    })}
+                  >
+                    <option value="any">Any</option>
+                    <option value={0}>Nonstop only</option>
+                    <option value={1}>Up to 1 stop</option>
+                    <option value={2}>Up to 2 stops</option>
+                  </select>
+                </label>
+                <label className="chat-criteria-field">
+                  <span>Travel date</span>
+                  <select
+                    value={dealAlertCriteria.datePreference}
+                    onChange={(event) => updateDealAlertCriteria({
+                      datePreference: event.target.value
+                    })}
+                  >
+                    <option value="any">Any date</option>
+                    <option value="earlier">Earlier than booked</option>
+                    <option value="later">Later than booked</option>
+                  </select>
+                </label>
+                <label className="chat-criteria-toggle">
+                  <input
+                    type="checkbox"
+                    checked={dealAlertCriteria.sameCabinOnly}
+                    onChange={(event) => updateDealAlertCriteria({
+                      sameCabinOnly: event.target.checked
+                    })}
+                  />
+                  <span>Keep the same cabin</span>
+                </label>
+                <div className="chat-choice-row">
+                  <button
+                    className="chat-choice-button chat-choice-button--primary"
+                    type="button"
+                    disabled={isProcessing}
+                    onClick={() => handleDealAlertChoice(true)}
+                  >
+                    Save alerts
+                  </button>
+                  <button
+                    className="chat-choice-button chat-choice-button--secondary"
+                    type="button"
+                    disabled={isProcessing}
+                    onClick={() => handleDealAlertChoice(false)}
+                  >
+                    No thanks
+                  </button>
+                </div>
               </div>
             )}
             {isProcessing && (
@@ -569,7 +656,7 @@ function LiveCDSProfileBootstrap({ cdsProfileId, onProfileCreated }) {
   const location = useLocation();
 
   useEffect(() => {
-    if (location.pathname !== "/flights" || location.hash || cdsProfileId) {
+    if (!isFlightLandingPath(location.pathname) || location.hash || cdsProfileId) {
       return;
     }
 
@@ -606,7 +693,7 @@ function GuestCDSProfileBootstrap({ cdsProfileId, onProfileCreated }) {
   const location = useLocation();
 
   useEffect(() => {
-    if (location.pathname !== "/flights" || location.hash || cdsProfileId) {
+    if (!isFlightLandingPath(location.pathname) || location.hash || cdsProfileId) {
       return;
     }
 
@@ -635,14 +722,8 @@ function GuestCDSProfileBootstrap({ cdsProfileId, onProfileCreated }) {
   return null;
 }
 
-function RootRoute({ authReady, cdsProfileId, locations, onSearch }) {
-  const location = useLocation();
-
-  if (!hasAsgardeoCallbackParams(location.search)) {
-    return <Navigate to="/flights" replace />;
-  }
-
-  return (
+function AppRoutes({ authReady, cdsProfileId, criteria, locations, onSearch }) {
+  const flightLandingElement = (
     <LandingRoute
       authReady={authReady}
       category="flights"
@@ -651,34 +732,11 @@ function RootRoute({ authReady, cdsProfileId, locations, onSearch }) {
       onSearch={onSearch}
     />
   );
-}
 
-function AppRoutes({ authReady, cdsProfileId, criteria, locations, onSearch }) {
   return (
     <Routes>
-      <Route
-        path="/"
-        element={
-          <RootRoute
-            authReady={authReady}
-            cdsProfileId={cdsProfileId}
-            locations={locations}
-            onSearch={onSearch}
-          />
-        }
-      />
-      <Route
-        path="/flights"
-        element={
-          <LandingRoute
-            authReady={authReady}
-            category="flights"
-            cdsProfileId={cdsProfileId}
-            locations={locations}
-            onSearch={onSearch}
-          />
-        }
-      />
+      <Route path="/" element={flightLandingElement} />
+      <Route path="/flights" element={flightLandingElement} />
       <Route
         path="/hotels"
         element={

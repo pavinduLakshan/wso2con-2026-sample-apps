@@ -63,17 +63,11 @@ The health endpoint is available at:
 http://localhost:8790/health
 ```
 
-## Better-Deal Test Flow
+## Better-Deal Alert Flow
 
-After a flight booking, the B2C frontend opens the agent widget and asks the user whether to store offline better-deal alert consent. If the user chooses Yes or No, the frontend sends the booking ID, username, route, and consent value to the agent, and the agent calls the `store_deal_alert_consent` MCP tool.
+After a flight booking, the B2C frontend opens the agent widget and shows an embedded criteria picker for offline better-deal alerts. The frontend sends the booking, route, consent value, and criteria to the agent, and the agent calls the `store_deal_alert_consent` MCP tool.
 
-To simulate a later better deal, send:
-
-```text
-DEAL <username>
-```
-
-The agent calls the `invoke_ciba_better_deal` MCP tool. That tool starts Asgardeo CIBA, waits for the user-approved access token, then updates the booked flight price through the bookings API.
+When the API receives a new flight through `POST /api/flights`, it checks enabled deal-alert consents for matching routes and criteria. If there are matches, it calls the agent's `POST /deal-alerts` webhook. The agent invokes the `process_new_flight_deal_alerts` MCP tool, which starts CIBA flows for the matched users. The first user who approves gets the new flight booked and their previous booking canceled; the remaining pending polls are canceled.
 
 ## WebSocket Protocol
 

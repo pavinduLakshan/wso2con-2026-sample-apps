@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createHash } from "node:crypto";
 import type { Duplex } from "node:stream";
 
@@ -51,9 +51,8 @@ const model = new ChatGoogleGenerativeAI({
 
 const agentPrompt = [
     "You are Wayfinder's travel assistant.",
-    "When a user asks to store offline better-deal alert consent for a flight booking, call store_deal_alert_consent with the exact bookingId, username, routeFrom, routeTo, and enabled values supplied by the user message.",
-    "When the user message is exactly DEAL <username> or asks to test a deal for a username, call the available better-deal CIBA tool with that username. Do not invent a username.",
-    "After storing consent or applying a better deal, summarize the result briefly.",
+    "When a user asks to store offline better-deal alert consent for a flight booking, call store_deal_alert_consent with the exact bookingId, username, routeFrom, routeTo, criteria, and enabled values supplied by the user message.",
+    "After storing consent, summarize the result briefly.",
     "Never show booking IDs, auth request IDs, access tokens, raw JSON, or other technical identifiers to the user.",
 ].join("\n");
 
@@ -288,41 +287,22 @@ function parseToolJson(result: unknown): unknown {
     }
 }
 
-function formatBetterDealResponse(result: unknown): string {
-    const parsed = parseToolJson(result);
-    const data = isJsonSchemaObject(parsed) && isJsonSchemaObject(parsed.data) ? parsed.data : {};
-    const previousPrice = typeof data.previousPrice === "number" ? data.previousPrice : null;
-    const newPrice = typeof data.newPrice === "number" ? data.newPrice : null;
-
-    if (previousPrice !== null && newPrice !== null) {
-        return `Good news. The better-deal consent was approved, and your booking price was updated from $${previousPrice} to $${newPrice}.`;
+function parseOptionalNumber(value: string | undefined) {
+    if (value === undefined || value.trim() === "") {
+        return undefined;
     }
 
-    return "Good news. The better-deal consent was approved, and your booking price has been updated.";
+    const parsed = Number(value);
+
+    return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-async function runHardcodedDealCommand(message: string, tools: ToolWithSchema[]) {
-    const dealMatch = message.trim().match(/^DEAL\s+(.+)$/i);
-
-    if (!dealMatch) {
-        return null;
+function parseOptionalBoolean(value: string | undefined) {
+    if (value === undefined || value.trim() === "") {
+        return undefined;
     }
 
-    const username = dealMatch[1].trim();
-    const dealTool = tools.find((tool) => isToolNamed(tool, "invoke_ciba_better_deal"));
-
-    if (!dealTool?.invoke) {
-        const availableTools = tools
-            .map((tool) => tool.name)
-            .filter(Boolean)
-            .join(", ");
-
-        throw new Error(`invoke_ciba_better_deal tool is not available. Loaded tools: ${availableTools || "none"}.`);
-    }
-
-    console.log(`Matched hardcoded DEAL command for username: ${username}`);
-
-    return formatBetterDealResponse(await dealTool.invoke({ username }));
+    return value === "true";
 }
 
 async function runHardcodedConsentCommand(message: string, tools: ToolWithSchema[]) {
@@ -349,17 +329,51 @@ async function runHardcodedConsentCommand(message: string, tools: ToolWithSchema
     }
 
     const enabled = values.enabled === "true";
+    let criteria: Record<string, unknown> = {};
+
+    if (values.criteria) {
+        try {
+            const parsedCriteria = JSON.parse(values.criteria);
+
+            if (isJsonSchemaObject(parsedCriteria)) {
+                criteria = parsedCriteria as Record<string, unknown>;
+            }
+        } catch {
+            criteria = {};
+        }
+    }
+
+    const minimumSavingsPercent = parseOptionalNumber(values.minimumSavingsPercent);
+    const maxStops = parseOptionalNumber(values.maxStops);
+    const sameCabinOnly = parseOptionalBoolean(values.sameCabinOnly);
+
+    if (minimumSavingsPercent !== undefined) {
+        criteria.minimumSavingsPercent = minimumSavingsPercent;
+    }
+
+    if (values.maxStops !== undefined) {
+        criteria.maxStops = maxStops ?? null;
+    }
+
+    if (values.datePreference) {
+        criteria.datePreference = values.datePreference;
+    }
+
+    if (sameCabinOnly !== undefined) {
+        criteria.sameCabinOnly = sameCabinOnly;
+    }
 
     await consentTool.invoke({
         bookingId: values.bookingId,
         username: values.username,
         routeFrom: values.routeFrom,
         routeTo: values.routeTo,
+        criteria,
         enabled,
     });
 
     return enabled
-        ? `Great, I will watch for better deals on ${values.routeFrom} to ${values.routeTo} and ask for your consent before applying any update.`
+        ? `Great, I will watch for better deals on ${values.routeFrom} to ${values.routeTo} using those criteria and ask for your consent before changing anything.`
         : "No problem. I will not send better-deal alerts for this booking.";
 }
 
@@ -524,12 +538,50 @@ function includeClientSecretInAgentAuthorizeRequest(client: AsgardeoJavaScriptCl
             ...requestConfig,
             client_secret: requestConfig.client_secret ?? "__include_client_secret__",
         }, userId);
-        const signInUrlParams = new URL(signInUrl).searchParams;
-
-        console.log("Agent authorize URL includes client_secret:", signInUrlParams.has("client_secret"));
 
         return signInUrl;
     };
+}
+
+async function readHttpJsonBody(request: IncomingMessage) {
+    const chunks: Buffer[] = [];
+
+    for await (const chunk of request) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+
+    if (chunks.length === 0) {
+        return {};
+    }
+
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+function writeHttpJson(response: ServerResponse, statusCode: number, body: Record<string, unknown>) {
+    response.writeHead(statusCode, { "Content-Type": "application/json" });
+    response.end(JSON.stringify(body));
+}
+
+async function processDealAlertWebhook(tools: ToolWithSchema[], payload: unknown) {
+    if (!isJsonSchemaObject(payload) || !Array.isArray(payload.matches) || payload.matches.length === 0) {
+        console.log("Deal alert webhook did not include matching consents.");
+
+        return;
+    }
+
+    const dealTool = tools.find((tool) => isToolNamed(tool, "process_new_flight_deal_alerts"));
+
+    if (!dealTool?.invoke) {
+        const availableTools = tools
+            .map((tool) => tool.name)
+            .filter(Boolean)
+            .join(", ");
+
+        throw new Error(`process_new_flight_deal_alerts tool is not available. Loaded tools: ${availableTools || "none"}.`);
+    }
+
+    console.log(`Processing ${payload.matches.length} matching better-deal alert consent(s).`);
+    await dealTool.invoke({ matches: payload.matches as unknown[] });
 }
 
 async function createAgent() {
@@ -540,14 +592,6 @@ async function createAgent() {
 
     const asgardeoJavaScriptClient = new AsgardeoJavaScriptClient(asgardeoConfig);
     includeClientSecretInAgentAuthorizeRequest(asgardeoJavaScriptClient);
-    console.log("Agent auth config:", {
-        clientId: asgardeoConfig.clientId,
-        clientSecret: asgardeoConfig.clientSecret,
-        baseUrl: asgardeoConfig.baseUrl,
-        redirectUri: asgardeoConfig.afterSignInUrl,
-        agentID: agentConfig.agentID,
-        agentSecret: redactSecret(agentConfig.agentSecret),
-    });
     const agentToken = await asgardeoJavaScriptClient.getAgentToken(agentConfig);
 
     const client = new MultiServerMCPClient({
@@ -577,22 +621,37 @@ async function runAgentServer() {
     const port = Number(process.env.PORT || process.env.AGENT_PORT || 8790);
     const host = process.env.HOST || "localhost";
 
-    const server = createServer((request, response) => {
+    const server = createServer(async (request, response) => {
         if (request.url === "/health") {
-            response.writeHead(200, { "Content-Type": "application/json" });
-            response.end(JSON.stringify({
+            writeHttpJson(response, 200, {
                 status: "ok",
                 features: {
-                    hardcodedDealCommand: true,
-                    cibaTool: tools.some((tool) => isToolNamed(tool, "invoke_ciba_better_deal")),
+                    dealAlertWebhook: true,
+                    cibaBatchTool: tools.some((tool) => isToolNamed(tool, "process_new_flight_deal_alerts")),
                 },
-            }));
+            });
 
             return;
         }
 
-        response.writeHead(404, { "Content-Type": "application/json" });
-        response.end(JSON.stringify({ error: "Not found" }));
+        if (request.method === "POST" && request.url === "/deal-alerts") {
+            try {
+                const payload = await readHttpJsonBody(request);
+
+                writeHttpJson(response, 202, { status: "accepted" });
+                void processDealAlertWebhook(tools, payload).catch((error: unknown) => {
+                    console.error("Error processing deal alert webhook:", error);
+                });
+            } catch (error) {
+                writeHttpJson(response, 400, {
+                    error: error instanceof Error ? error.message : "Invalid deal alert payload.",
+                });
+            }
+
+            return;
+        }
+
+        writeHttpJson(response, 404, { error: "Not found" });
     });
 
     const handleConnection = (socket: Duplex) => {
@@ -655,8 +714,7 @@ async function runAgentServer() {
                             }
 
                             const hardcodedResponse =
-                                await runHardcodedConsentCommand(latestMessage, tools) ??
-                                await runHardcodedDealCommand(latestMessage, tools);
+                                await runHardcodedConsentCommand(latestMessage, tools);
                             const responseMessage = hardcodedResponse ?? getResponseContent(
                                 (await agent.invoke({ messages })).messages.at(-1)?.content
                             );
@@ -739,7 +797,7 @@ async function runAgentServer() {
     });
 
     const shutdown = async () => {
-        console.log("Shutting down AI agent server...");
+        console.log("Shutting down AI agent...");
         server.close();
         await client.close();
         process.exit(0);

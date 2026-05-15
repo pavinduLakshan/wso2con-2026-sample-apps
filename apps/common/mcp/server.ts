@@ -63,6 +63,30 @@ const cibaGrantType = "urn:openid:params:grant-type:ciba";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
+function decodeBase64UrlJson(value: string) {
+    const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+
+    return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as Record<string, unknown>;
+}
+
+function getUsernameClaimFromAccessToken(accessToken: string) {
+    const parts = accessToken.split(".");
+
+    if (parts.length !== 3) {
+        throw new Error("CIBA access token is not a JWT and cannot provide a username claim.");
+    }
+
+    const payload = decodeBase64UrlJson(parts[1]);
+    const username = typeof payload.username === "string" ? payload.username.trim() : "";
+
+    if (!username) {
+        throw new Error("CIBA access token did not include a username claim.");
+    }
+
+    return username;
+}
+
 function getAuthorizationHeader(request: IncomingMessage): string | undefined {
     const authorization = request.headers.authorization;
 
@@ -106,8 +130,29 @@ function createApiClient(authorization?: string) {
             method: "POST",
             body: JSON.stringify(body),
         }),
-        patch: (path: string, body: JsonValue, bearerToken?: string) => {
-            const headers = bearerToken ? { Authorization: `Bearer ${bearerToken}` } : undefined;
+        postWithBearer: (
+            path: string,
+            body: JsonValue,
+            bearerToken: string,
+            userHeaders?: Record<string, string>,
+        ) => requestApi(path, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${bearerToken}`,
+                ...(userHeaders ?? {}),
+            },
+            body: JSON.stringify(body),
+        }),
+        patch: (
+            path: string,
+            body: JsonValue,
+            bearerToken?: string,
+            userHeaders?: Record<string, string>,
+        ) => {
+            const headers = bearerToken ? {
+                Authorization: `Bearer ${bearerToken}`,
+                ...(userHeaders ?? {}),
+            } : userHeaders;
 
             return requestApi(path, {
                 method: "PATCH",
@@ -155,7 +200,7 @@ function buildCibaAuthorizationHeader() {
     return `Basic ${encodedCredentials}`;
 }
 
-async function postAsgardeoForm(path: string, body: URLSearchParams) {
+async function postAsgardeoForm(path: string, body: URLSearchParams, signal?: AbortSignal) {
     const baseUrl = getRequiredEnv("ASGARDEO_BASE_URL").replace(/\/$/, "");
     const response = await fetch(`${baseUrl}${path}`, {
         method: "POST",
@@ -165,21 +210,37 @@ async function postAsgardeoForm(path: string, body: URLSearchParams) {
             Accept: "application/json",
         },
         body: body.toString(),
+        signal,
     });
     const data = await response.json().catch(() => ({})) as Record<string, unknown>;
 
     if (!response.ok) {
-        const message = data.error_description || data.error || `Asgardeo request failed with ${response.status}`;
+        const errorCode = typeof data.error === "string" ? data.error : "";
+        const errorDescription = typeof data.error_description === "string" ? data.error_description : "";
+        const message = [errorCode, errorDescription]
+            .filter(Boolean)
+            .join(": ") || `Asgardeo request failed with ${response.status}`;
 
-        throw new Error(String(message));
+        throw new Error(message);
     }
 
     return data;
 }
 
-function delay(milliseconds: number) {
-    return new Promise((resolve) => {
-        setTimeout(resolve, milliseconds);
+function delay(milliseconds: number, signal?: AbortSignal) {
+    return new Promise<void>((resolve, reject) => {
+        if (signal?.aborted) {
+            reject(new Error("CIBA polling was canceled."));
+
+            return;
+        }
+
+        const timeout = setTimeout(resolve, milliseconds);
+
+        signal?.addEventListener("abort", () => {
+            clearTimeout(timeout);
+            reject(new Error("CIBA polling was canceled."));
+        }, { once: true });
     });
 }
 
@@ -187,10 +248,12 @@ async function invokeCiba({
     authorization,
     bindingMessage,
     loginHint,
+    signal,
 }: {
     authorization?: string;
     bindingMessage: string;
     loginHint: string;
+    signal?: AbortSignal;
 }) {
     const scope = process.env.CIBA_SCOPE?.trim() || "openid profile";
     const cibaBody = new URLSearchParams({
@@ -204,7 +267,7 @@ async function invokeCiba({
         cibaBody.set("actor_token", actorToken);
     }
 
-    const cibaResponse = await postAsgardeoForm("/oauth2/ciba", cibaBody);
+    const cibaResponse = await postAsgardeoForm("/oauth2/ciba", cibaBody, signal);
     const authReqId = typeof cibaResponse.auth_req_id === "string" ? cibaResponse.auth_req_id : "";
 
     if (!authReqId) {
@@ -217,7 +280,7 @@ async function invokeCiba({
     const startedAt = Date.now();
 
     while (Date.now() - startedAt < timeoutMs) {
-        await delay(Math.max(intervalSeconds, 1) * 1000);
+        await delay(Math.max(intervalSeconds, 1) * 1000, signal);
 
         const tokenBody = new URLSearchParams({
             grant_type: cibaGrantType,
@@ -225,7 +288,7 @@ async function invokeCiba({
         });
 
         try {
-            const tokenResponse = await postAsgardeoForm("/oauth2/token", tokenBody);
+            const tokenResponse = await postAsgardeoForm("/oauth2/token", tokenBody, signal);
             const accessToken = typeof tokenResponse.access_token === "string" ? tokenResponse.access_token : "";
 
             if (!accessToken) {
@@ -239,8 +302,9 @@ async function invokeCiba({
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
+            const normalizedMessage = message.toLowerCase().replace(/[\s-]+/g, "_");
 
-            if (message.includes("authorization_pending") || message.includes("slow_down")) {
+            if (normalizedMessage.includes("authorization_pending") || normalizedMessage.includes("slow_down")) {
                 continue;
             }
 
@@ -249,6 +313,193 @@ async function invokeCiba({
     }
 
     throw new Error("Timed out waiting for the user to approve the CIBA request.");
+}
+
+const dealAlertMatchSchema = z.object({
+    consent: z.object({
+        bookingId: z.string(),
+        username: z.string(),
+        routeFrom: z.string(),
+        routeTo: z.string(),
+        criteria: z.record(z.string(), z.unknown()).optional(),
+    }),
+    currentPrice: z.number(),
+    currency: z.string().optional(),
+    travelers: z.number().int().optional(),
+    userId: z.string().optional(),
+    newFlight: z.object({
+        id: z.string(),
+        from: z.string(),
+        to: z.string(),
+        airline: z.string().optional(),
+        departureTime: z.string().optional(),
+        arrivalTime: z.string().optional(),
+        stops: z.number().int().optional(),
+        price: z.number(),
+        currency: z.string().optional(),
+        cabin: z.string().optional(),
+        dates: z.string().optional(),
+    }),
+});
+
+type DealAlertMatch = z.infer<typeof dealAlertMatchSchema>;
+
+async function reserveBetterDealForMatch({
+    api,
+    authorization,
+    match,
+    onApproved,
+    signal,
+}: {
+    api: ReturnType<typeof createApiClient>;
+    authorization?: string;
+    match: DealAlertMatch;
+    onApproved?: () => boolean;
+    signal: AbortSignal;
+}) {
+    const { consent, newFlight } = match;
+    const currentPrice = Number(match.currentPrice);
+    const newPrice = Number(newFlight.price);
+    const savingsPercent = Number((((currentPrice - newPrice) / currentPrice) * 100).toFixed(1));
+    const ciba = await invokeCiba({
+        authorization,
+        loginHint: consent.username,
+        bindingMessage: `Approve booking the new ${newFlight.from} to ${newFlight.to} flight at ${newFlight.currency || match.currency || "USD"} ${newPrice}. Your existing booking will be canceled.`,
+        signal,
+    });
+
+    if (onApproved && !onApproved()) {
+        throw new Error("Another user approved this better deal first.");
+    }
+
+    const approvedUsername = getUsernameClaimFromAccessToken(ciba.accessToken);
+    const user = {
+        id: approvedUsername,
+        username: approvedUsername,
+    };
+    const userHeaders = {
+        "X-Wayfinder-User-Id": approvedUsername,
+        "X-Wayfinder-Username": approvedUsername,
+        "X-Wayfinder-Email": approvedUsername,
+    };
+    const booking = await api.postWithBearer("/api/bookings", {
+        type: "flight",
+        itemId: newFlight.id,
+        travelers: match.travelers ?? 1,
+        user,
+    }, ciba.accessToken, userHeaders);
+    const createdBooking = (
+        typeof booking === "object" &&
+        booking !== null &&
+        !Array.isArray(booking) &&
+        typeof booking.id === "string"
+    ) ? booking : null;
+
+    if (!createdBooking) {
+        throw new Error("Replacement booking response did not include a booking id.");
+    }
+
+    const transferredConsent = await api.postWithBearer("/api/deal-alert-consents/transfer", {
+        fromBookingId: consent.bookingId,
+        toBookingId: createdBooking.id,
+        username: approvedUsername,
+    }, ciba.accessToken, userHeaders);
+    const canceledBooking = await api.patch(
+        `/api/bookings/${encodeURIComponent(consent.bookingId)}/cancel`,
+        {
+            username: approvedUsername,
+            preserveDealAlerts: true,
+        },
+        ciba.accessToken,
+        userHeaders,
+    );
+
+    return {
+        username: approvedUsername,
+        routeFrom: consent.routeFrom,
+        routeTo: consent.routeTo,
+        previousPrice: currentPrice,
+        newPrice,
+        savingsPercent,
+        booking,
+        transferredConsent,
+        canceledBooking,
+    };
+}
+
+async function reserveFirstApprovedBetterDeal({
+    api,
+    authorization,
+    matches,
+}: {
+    api: ReturnType<typeof createApiClient>;
+    authorization?: string;
+    matches: DealAlertMatch[];
+}) {
+    if (matches.length === 0) {
+        throw new Error("At least one matching deal alert consent is required.");
+    }
+
+    const controllers = matches.map(() => new AbortController());
+    const errors: string[] = [];
+
+    return await new Promise<JsonValue>((resolve, reject) => {
+        let approvedIndex: number | null = null;
+        let settled = false;
+        let remaining = matches.length;
+
+        matches.forEach((match, index) => {
+            reserveBetterDealForMatch({
+                api,
+                authorization,
+                match,
+                onApproved: () => {
+                    if (approvedIndex !== null) {
+                        return false;
+                    }
+
+                    approvedIndex = index;
+                    controllers.forEach((controller, controllerIndex) => {
+                        if (controllerIndex !== index) {
+                            controller.abort();
+                        }
+                    });
+
+                    return true;
+                },
+                signal: controllers[index].signal,
+            }).then((result) => {
+                if (settled) {
+                    return;
+                }
+
+                settled = true;
+                resolve(result as JsonValue);
+            }).catch((error: unknown) => {
+                if (settled) {
+                    return;
+                }
+
+                if (approvedIndex === index) {
+                    settled = true;
+                    reject(error);
+
+                    return;
+                }
+
+                if (approvedIndex !== null) {
+                    return;
+                }
+
+                remaining -= 1;
+                errors.push(error instanceof Error ? error.message : String(error));
+
+                if (remaining === 0) {
+                    reject(new Error(`No user approved the better-deal booking. ${errors.join(" ")}`.trim()));
+                }
+            });
+        });
+    });
 }
 
 function createTravelMcpServer(authorization?: string) {
@@ -358,76 +609,62 @@ function createTravelMcpServer(authorization?: string) {
             username: z.string().describe("The username on the booking."),
             routeFrom: z.string().describe("Flight origin city."),
             routeTo: z.string().describe("Flight destination city."),
+            criteria: z.object({
+                minimumSavingsPercent: z.number().min(0).max(95).optional(),
+                maxStops: z.number().int().min(0).nullable().optional(),
+                datePreference: z.enum(["any", "earlier", "later"]).optional(),
+                sameCabinOnly: z.boolean().optional(),
+            }).optional().describe("User-selected criteria for matching future better deals."),
+            minimumSavingsPercent: z.number().min(0).max(95).optional(),
+            maxStops: z.number().int().min(0).nullable().optional(),
+            datePreference: z.enum(["any", "earlier", "later"]).optional(),
+            sameCabinOnly: z.boolean().optional(),
             enabled: z.boolean().describe("true when the user agrees to alerts, false when they decline."),
         },
-        async ({ bookingId, username, routeFrom, routeTo, enabled }) => toToolContent(await api.post(
+        async ({
+            bookingId,
+            username,
+            routeFrom,
+            routeTo,
+            criteria,
+            minimumSavingsPercent,
+            maxStops,
+            datePreference,
+            sameCabinOnly,
+            enabled,
+        }) => toToolContent(await api.post(
             "/api/deal-alert-consents",
             {
                 bookingId,
                 username,
                 routeFrom,
                 routeTo,
+                criteria: {
+                    ...(criteria ?? {}),
+                    ...(minimumSavingsPercent !== undefined ? { minimumSavingsPercent } : {}),
+                    ...(maxStops !== undefined ? { maxStops } : {}),
+                    ...(datePreference !== undefined ? { datePreference } : {}),
+                    ...(sameCabinOnly !== undefined ? { sameCabinOnly } : {}),
+                },
                 enabled,
             },
         )),
     );
 
     server.tool(
-        "invoke_ciba_better_deal",
-        "For test input DEAL <username>, initiate Asgardeo CIBA consent and reduce a consented flight booking price.",
+        "process_new_flight_deal_alerts",
+        "For a newly added flight, initiate CIBA requests for matching deal-alert consents, book the new flight for the first approving user, cancel their previous flight, and cancel the remaining pending polls.",
         {
-            username: z.string().describe("The username that should receive the CIBA authorization request."),
-            bookingId: z.string().optional().describe("Optional booking ID. If omitted, the newest enabled consent is used."),
-            discountPercent: z.number().min(1).max(90).optional().describe("Optional discount percent. Defaults to 15."),
+            matches: z.array(dealAlertMatchSchema).min(1).describe("Deal-alert consent matches produced by the flight insertion listener."),
         },
-        async ({ username, bookingId, discountPercent }) => {
-            const consents = await api.get(`/api/deal-alert-consents/${encodeURIComponent(username)}`);
-            const consentList = (
-                typeof consents === "object" &&
-                consents !== null &&
-                !Array.isArray(consents) &&
-                Array.isArray(consents.data)
-            ) ? consents.data as Array<Record<string, JsonValue>> : [];
-            const selectedConsent = bookingId
-                ? consentList.find((consent) => consent.bookingId === bookingId)
-                : consentList[0];
-
-            if (!selectedConsent) {
-                throw new Error(`No enabled better-deal alert consent found for ${username}.`);
-            }
-
-            const currentPrice = Number(selectedConsent.currentPrice);
-            const percent = discountPercent ?? 15;
-            const newPrice = Number((currentPrice * (1 - percent / 100)).toFixed(2));
-            const routeFrom = String(selectedConsent.routeFrom || "");
-            const routeTo = String(selectedConsent.routeTo || "");
-            const selectedBookingId = String(selectedConsent.bookingId || "");
-            const ciba = await invokeCiba({
+        async ({ matches }) => {
+            const result = await reserveFirstApprovedBetterDeal({
+                api,
                 authorization,
-                loginHint: username,
-                bindingMessage: `Approve a ${percent}% better-deal price update for your ${routeFrom} to ${routeTo} booking.`,
+                matches,
             });
-            const updatedBooking = await api.patch(
-                `/api/bookings/${encodeURIComponent(selectedBookingId)}/price`,
-                {
-                    username,
-                    price: newPrice,
-                },
-                ciba.accessToken,
-            );
 
-            return toToolContent({
-                data: {
-                    booking: updatedBooking,
-                    ciba: {
-                        authReqId: ciba.authReqId,
-                        authUrl: ciba.authUrl || null,
-                    },
-                    previousPrice: currentPrice,
-                    newPrice,
-                    discountPercent: percent,
-                },
-            });
+            return toToolContent({ data: result });
         },
     );
 

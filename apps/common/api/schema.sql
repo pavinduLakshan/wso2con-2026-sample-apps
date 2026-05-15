@@ -62,9 +62,18 @@ CREATE TABLE deal_alert_consents (
   username TEXT NOT NULL,
   route_from TEXT NOT NULL,
   route_to TEXT NOT NULL,
+  criteria_json TEXT NOT NULL DEFAULT '{}',
   enabled INTEGER NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   UNIQUE (booking_id, username),
-  FOREIGN KEY (booking_id) REFERENCES bookings(id)
+  FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
 );
+
+CREATE TRIGGER delete_deal_alert_consents_after_booking_delete
+AFTER DELETE ON bookings
+FOR EACH ROW
+BEGIN
+  DELETE FROM deal_alert_consents
+  WHERE booking_id = OLD.id;
+END;

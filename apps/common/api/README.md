@@ -30,6 +30,8 @@ http://localhost:8787
 ```text
 GET  /health
 GET  /api/flights?from=Colombo&to=Singapore
+POST /api/flights
+DELETE /api/flights/:flightId
 GET  /api/hotels?location=Singapore
 GET  /api/trips
 GET  /api/locations?category=flights
@@ -39,6 +41,7 @@ GET  /api/bookings/flights/:bookingId
 PATCH /api/bookings/:bookingId/price
 PATCH /api/bookings/:bookingId/cancel
 POST /api/deal-alert-consents
+POST /api/deal-alert-consents/transfer
 GET  /api/deal-alert-consents/:username
 GET  /api/me
 ```
@@ -56,6 +59,25 @@ openapi.yaml
   "type": "flight",
   "itemId": "flight-cmb-sin-01",
   "travelers": 2
+}
+```
+
+`POST /api/flights` inserts a flight, checks enabled better-deal alert consents, and calls the configured agent webhook when criteria match:
+
+```json
+{
+  "from": "Colombo",
+  "to": "Singapore",
+  "airline": "Serendib Air",
+  "departureTime": "10:20",
+  "arrivalTime": "16:30",
+  "duration": "4h 10m",
+  "stops": 0,
+  "price": 250,
+  "currency": "USD",
+  "cabin": "Economy",
+  "dates": "Jun 12 - Jun 18",
+  "tags": ["Better deal"]
 }
 ```
 
