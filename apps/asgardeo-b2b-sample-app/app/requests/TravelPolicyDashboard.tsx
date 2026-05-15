@@ -5,7 +5,7 @@ import WorkspaceShell from "../WorkspaceShell";
 import { useAuth } from "../lib/auth/client";
 import { UserRole } from "../lib/auth/utils";
 
-export default function TravelPolicyDashboard({ role }: { role: UserRole }) {
+export default function TravelPolicyDashboard({ roles }: { roles: UserRole[] }) {
   const { accessToken } = useAuth();
 
   const [domesticCabin, setDomesticCabin] = useState("Economy");
@@ -127,7 +127,7 @@ export default function TravelPolicyDashboard({ role }: { role: UserRole }) {
       activeHref="/requests"
       eyebrow="Admin workspace"
       loading={loading}
-      role={role}
+      roles={roles}
       title="Travel policy management"
     >
       {/* ── Save confirmation banner ──────────────────────────── */}

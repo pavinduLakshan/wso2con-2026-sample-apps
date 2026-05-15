@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "../../../lib/auth/guard";
-import { UserRole } from "../../../lib/auth/utils";
+import { USER_ROLE_TO_ASGARDEO_ROLE, UserRole } from "../../../lib/auth/utils";
 import { scimAssignRoleToUser, scimCreateUser, scimFetchRoleIdByName, scimListUsers } from "../../../lib/asgardeo/client";
 
 type InviteRequest = {
@@ -10,13 +10,8 @@ type InviteRequest = {
   role?: string;
 };
 
-const adminRoleName = process.env.NEXT_PUBLIC_ASGARDEO_ADMIN_ROLE_NAME ?? "WayFinder-Admin";
-const memberRoleName = process.env.NEXT_PUBLIC_ASGARDEO_MEMBER_ROLE_NAME ?? "WayFinder-Member";
-
 function resolveAsgardeoRoleName(uiRole: string): string {
-  if (uiRole === "Admin") return adminRoleName;
-  if (uiRole === "Member") return memberRoleName;
-  return uiRole;
+  return USER_ROLE_TO_ASGARDEO_ROLE[uiRole as UserRole] ?? uiRole;
 }
 
 export async function GET(request: NextRequest) {

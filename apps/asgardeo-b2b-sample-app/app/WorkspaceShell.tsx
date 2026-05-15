@@ -34,14 +34,14 @@ export default function WorkspaceShell({
   children,
   eyebrow,
   loading,
-  role,
+  roles,
   title
 }: Readonly<{
   activeHref: string;
   children: ReactNode;
   eyebrow: string;
   loading?: boolean;
-  role: UserRole;
+  roles: UserRole[];
   title: string;
 }>) {
   const { isLoading: authLoading } = useAuth();
@@ -50,7 +50,7 @@ export default function WorkspaceShell({
     return <LoadingScreen description="Please wait while we set up your workspace." steps={[]} title="Loading your workspace…" />;
   }
 
-  if (role !== UserRole.ADMIN) {
+  if (!roles.includes(UserRole.ADMIN)) {
     return (
       <main className="member-shell">
         <ImpersonationBanner />

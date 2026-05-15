@@ -103,6 +103,136 @@ export async function scimListUsers(
   return { users, totalResults: typeof json?.totalResults === "number" ? json.totalResults : users.length };
 }
 
+export async function scimSendPasswordResetLink(accessToken: string, userId: string): Promise<void> {
+  const response = await fetch(`${getBaseUrl()}/o/scim2/Users/${userId}`, {
+    body: JSON.stringify({
+      Operations: [{ op: "add", value: { "urn:scim:wso2:schema": { forcePasswordReset: "true" } } }],
+      schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    }),
+    headers: {
+      Accept: "application/scim+json",
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/scim+json",
+    },
+    method: "PATCH",
+  });
+
+  if (!response.ok) {
+    const json = await response.json().catch(() => null);
+    const message = typeof json?.detail === "string" ? json.detail : "Failed to send password reset link.";
+    console.error("[asgardeo/client] scimSendPasswordResetLink failed:", response.status, JSON.stringify(json));
+    throw new Error(message);
+  }
+}
+
+export async function scimUpdateAccountLocked(accessToken: string, userId: string, locked: boolean): Promise<void> {
+  const response = await fetch(`${getBaseUrl()}/o/scim2/Users/${userId}`, {
+    body: JSON.stringify({
+      Operations: [{ op: "replace", value: { "urn:scim:wso2:schema": { accountLocked: String(locked) } } }],
+      schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    }),
+    headers: {
+      Accept: "application/scim+json",
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/scim+json",
+    },
+    method: "PATCH",
+  });
+
+  if (!response.ok) {
+    const json = await response.json().catch(() => null);
+    const message = typeof json?.detail === "string" ? json.detail : `Failed to ${locked ? "lock" : "unlock"} account.`;
+    console.error("[asgardeo/client] scimUpdateAccountLocked failed:", response.status, JSON.stringify(json));
+    throw new Error(message);
+  }
+}
+
+export interface ScimRoleWithUsers {
+  id: string;
+  displayName: string;
+  users?: Array<{ value: string }>;
+}
+
+export async function scimListRolesWithUsers(accessToken: string): Promise<ScimRoleWithUsers[]> {
+  const response = await fetch(`${getBaseUrl()}/o/scim2/v2/Roles?attributes=id,displayName,users`, {
+    headers: {
+      Accept: "application/scim+json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    method: "GET",
+  });
+
+  const json = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message =
+      typeof json?.detail === "string" ? json.detail :
+      typeof json?.message === "string" ? json.message :
+      "Failed to fetch roles.";
+    console.error("[asgardeo/client] scimListRolesWithUsers failed:", response.status, JSON.stringify(json));
+    throw new Error(message);
+  }
+
+  return Array.isArray(json?.Resources) ? json.Resources : [];
+}
+
+export async function scimGetRoleById(accessToken: string, roleId: string): Promise<ScimRoleWithUsers> {
+  const response = await fetch(`${getBaseUrl()}/o/scim2/v2/Roles/${roleId}`, {
+    headers: {
+      Accept: "application/scim+json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    method: "GET",
+  });
+
+  const json = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message =
+      typeof json?.detail === "string" ? json.detail :
+      typeof json?.message === "string" ? json.message :
+      `Failed to fetch role ${roleId}.`;
+    console.error("[asgardeo/client] scimGetRoleById failed:", response.status, JSON.stringify(json));
+    throw new Error(message);
+  }
+
+  return json as ScimRoleWithUsers;
+}
+
+export async function scimUpdateRoleUsers(
+  accessToken: string,
+  roleId: string,
+  toAdd: string[],
+  toRemove: string[]
+): Promise<void> {
+  if (toAdd.length === 0 && toRemove.length === 0) return;
+
+  const operations = [
+    ...toAdd.map((userId) => ({ op: "add", path: "users", value: [{ value: userId }] })),
+    ...toRemove.map((userId) => ({ op: "remove", path: `users[value eq "${userId}"]` })),
+  ];
+
+  const response = await fetch(`${getBaseUrl()}/o/scim2/v2/Roles/${roleId}`, {
+    body: JSON.stringify({
+      Operations: operations,
+      schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    }),
+    headers: {
+      Accept: "application/scim+json",
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/scim+json",
+    },
+    method: "PATCH",
+  });
+
+  if (!response.ok) {
+    const json = await response.json().catch(() => null);
+    const message = typeof json?.detail === "string" ? json.detail : "Failed to update role users.";
+    console.error("[asgardeo/client] scimUpdateRoleUsers failed:", response.status, JSON.stringify(json));
+    throw new Error(message);
+  }
+}
+
 export async function scimAssignRoleToUser(accessToken: string, roleId: string, userId: string): Promise<void> {
   const response = await fetch(`${getBaseUrl()}/o/scim2/v2/Roles/${roleId}`, {
     body: JSON.stringify({
