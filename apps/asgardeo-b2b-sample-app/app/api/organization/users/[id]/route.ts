@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole } from "../../../../lib/auth/guard";
-import { UserRole } from "../../../../lib/auth/utils";
+import { requireScope } from "../../../../lib/auth/guard";
+import { Scope } from "../../../../lib/auth/utils";
 import { scimUpdateAccountLocked } from "../../../../lib/asgardeo/client";
 
 type PatchRequest = { locked?: boolean };
@@ -9,7 +9,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireRole(request, [UserRole.ADMIN]);
+  const auth = await requireScope(request, [Scope.USER_UPDATE]);
   if (auth instanceof NextResponse) return auth;
 
   const { id } = await params;

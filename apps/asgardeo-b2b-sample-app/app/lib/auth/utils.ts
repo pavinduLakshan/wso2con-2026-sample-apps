@@ -1,3 +1,15 @@
+export enum Scope {
+  USER_LIST = "internal_org_user_mgt_list",
+  USER_CREATE = "internal_org_user_mgt_create",
+  USER_UPDATE = "internal_org_user_mgt_update",
+  ROLE_VIEW = "internal_org_role_mgt_view",
+  ROLE_USERS_UPDATE = "internal_org_role_mgt_users_update",
+  TRAVEL_POLICY_VIEW = "view_travel_policy",
+  TRAVEL_POLICY_CREATE = "create_travel_policy",
+  TRAVEL_POLICY_UPDATE = "update_travel_policy",
+  TRAVEL_POLICY_DELETE = "delete_travel_policy",
+}
+
 export enum UserRole {
   ADMIN = "Admin",
   MEMBER = "Member",

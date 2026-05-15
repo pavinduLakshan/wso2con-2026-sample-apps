@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole } from "../../../lib/auth/guard";
-import { USER_ROLE_TO_ASGARDEO_ROLE, UserRole } from "../../../lib/auth/utils";
+import { requireScope } from "../../../lib/auth/guard";
+import { Scope, USER_ROLE_TO_ASGARDEO_ROLE, UserRole } from "../../../lib/auth/utils";
 import { scimAssignRoleToUser, scimCreateUser, scimFetchRoleIdByName, scimListUsers } from "../../../lib/asgardeo/client";
 
 type InviteRequest = {
@@ -15,7 +15,7 @@ function resolveAsgardeoRoleName(uiRole: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireRole(request, [UserRole.ADMIN]);
+  const auth = await requireScope(request, [Scope.USER_LIST]);
   if (auth instanceof NextResponse) return auth;
 
   try {
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireRole(request, [UserRole.ADMIN]);
+  const auth = await requireScope(request, [Scope.USER_CREATE]);
   if (auth instanceof NextResponse) return auth;
 
   try {

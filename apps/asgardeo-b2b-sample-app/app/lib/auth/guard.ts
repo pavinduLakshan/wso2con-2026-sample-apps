@@ -1,10 +1,9 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { NextRequest, NextResponse } from "next/server";
-import { USER_ROLE_TO_ASGARDEO_ROLE, UserRole } from "./utils";
 
 export interface TokenClaims {
   orgId: string;
-  roles: string[];
+  scopes: string[];
 }
 
 const baseUrl = (process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL ?? "").replace(/\/$/, "");
@@ -37,34 +36,31 @@ export async function requireAuth(
       return NextResponse.json({ error: "Token is missing org_id claim." }, { status: 401 });
     }
 
-    const roles = Array.isArray(payload.roles)
-      ? (payload.roles as unknown[]).map(String)
-      : [];
+    const scopes = typeof payload.scope === "string" ? payload.scope.split(" ") : [];
 
-    return { claims: { orgId, roles } };
+    return { claims: { orgId, scopes } };
   } catch {
     return NextResponse.json({ error: "Invalid or expired token." }, { status: 401 });
   }
 }
 
 /**
- * Like requireAuth, but also enforces that the caller has one of the allowed roles.
- * Returns a 403 response when the token is valid but the role requirement is not met.
+ * Like requireAuth, but also enforces that the caller has at least one of the required scopes.
+ * Returns a 403 response when the token is valid but the scope requirement is not met.
  *
- *   const auth = await requireRole(request, [UserRole.ADMIN]);
+ *   const auth = await requireScope(request, ["internal_org_user_mgt_list"]);
  *   if (auth instanceof NextResponse) return auth;
  */
-export async function requireRole(
+export async function requireScope(
   request: NextRequest,
-  allowedRoles: UserRole[]
+  requiredScopes: string[]
 ): Promise<{ claims: TokenClaims } | NextResponse> {
   const result = await requireAuth(request);
   if (result instanceof NextResponse) return result;
 
-  const allowed = allowedRoles.map((r) => USER_ROLE_TO_ASGARDEO_ROLE[r]);
-  const hasRole = result.claims.roles.some((r) => allowed.includes(r));
+  const hasScope = requiredScopes.some((s) => result.claims.scopes.includes(s));
 
-  if (!hasRole) {
+  if (!hasScope) {
     return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
   }
 

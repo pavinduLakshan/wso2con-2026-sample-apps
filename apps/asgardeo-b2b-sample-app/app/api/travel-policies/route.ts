@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTravelPolicy, upsertTravelPolicy, TravelPolicy } from "../../lib/db/queries/travel-policies";
-import { requireAuth, requireRole } from "../../lib/auth/guard";
-import { UserRole } from "../../lib/auth/utils";
+import { requireScope } from "../../lib/auth/guard";
+import { Scope } from "../../lib/auth/utils";
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request);
+  const auth = await requireScope(request, [Scope.TRAVEL_POLICY_VIEW]);
   if (auth instanceof NextResponse) return auth;
 
   const policy = getTravelPolicy(auth.claims.orgId);
@@ -21,7 +21,7 @@ type UpsertBody = {
 };
 
 export async function PUT(request: NextRequest) {
-  const auth = await requireRole(request, [UserRole.ADMIN]);
+  const auth = await requireScope(request, [Scope.TRAVEL_POLICY_UPDATE]);
   if (auth instanceof NextResponse) return auth;
 
   let body: UpsertBody;
