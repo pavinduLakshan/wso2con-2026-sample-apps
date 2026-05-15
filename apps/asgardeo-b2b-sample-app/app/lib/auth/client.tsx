@@ -11,6 +11,7 @@ interface SignInOptions {
 }
 
 interface AuthState {
+  isLoading: boolean;
   isSignedIn: boolean;
   accessToken: string | null;
   idToken: string | null;
@@ -21,6 +22,7 @@ interface AuthState {
 }
 
 const AuthContext = createContext<AuthState>({
+  isLoading: true,
   isSignedIn: false,
   accessToken: null,
   idToken: null,
@@ -88,6 +90,7 @@ function buildAuthorizeUrl(options?: SignInOptions): string {
 export function AuthProvider({ children, initialIsExchanging = false }: { children: ReactNode; initialIsExchanging?: boolean }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [idToken, setIdToken] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
   const [isExchanging, setIsExchanging] = useState(initialIsExchanging);
   const [exchangeError, setExchangeError] = useState<string | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -129,6 +132,7 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
       localStorage.removeItem("access_token");
       localStorage.removeItem("id_token");
     }
+    setInitialized(true);
   }, [scheduleExpiryCheck]);
 
   const storeToken = useCallback((access: string, id?: string) => {
@@ -258,6 +262,7 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
       value={{
         accessToken,
         idToken,
+        isLoading: !initialized || isExchanging,
         isSignedIn: !!accessToken,
         signIn,
         signOut,
