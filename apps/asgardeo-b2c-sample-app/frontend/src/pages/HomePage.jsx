@@ -192,25 +192,25 @@ const pageDetails = {
       {
         className: "deal-card--mint",
         icon: <Plane size={22} />,
-        route: "Colombo to Singapore",
-        title: "Nonstop city break with smart baggage picks",
-        price: "$420",
+        route: "New York to Los Angeles",
+        title: "Nonstop coast-to-coast with flexible booking",
+        price: "$268",
         meta: "Jun 12 - Jun 18"
       },
       {
         className: "deal-card--coral",
         icon: <Plane size={22} />,
-        route: "Colombo to Tokyo",
-        title: "Evening departure with a comfortable connection",
-        price: "$610",
+        route: "Chicago to Miami",
+        title: "Quick escape to warm beaches and sunny skies",
+        price: "$245",
         meta: "Economy round trip"
       },
       {
         className: "deal-card--gold",
         icon: <Plane size={22} />,
-        route: "Colombo to Dubai",
-        title: "Short-haul escape with flexible return dates",
-        price: "$380",
+        route: "Denver to Las Vegas",
+        title: "Short hop with budget-friendly rates and great value",
+        price: "$132",
         meta: "Best value this week"
       }
     ]
@@ -244,25 +244,25 @@ const pageDetails = {
       {
         className: "deal-card--mint",
         icon: <Hotel size={22} />,
-        route: "Singapore Marina",
-        title: "Waterfront stays close to transit and evening plans",
-        price: "$210",
+        route: "Los Angeles Marina",
+        title: "Beachfront stays with pools and gym access",
+        price: "$148",
         meta: "Average nightly rate"
       },
       {
         className: "deal-card--coral",
         icon: <Hotel size={22} />,
-        route: "Tokyo Shibuya",
-        title: "Walkable rooms near food, rail, and late-night plans",
-        price: "$186",
+        route: "Miami Beach",
+        title: "Ocean view hotels with spa and restaurant nearby",
+        price: "$156",
         meta: "Guest favorite area"
       },
       {
         className: "deal-card--gold",
         icon: <Hotel size={22} />,
-        route: "London Kings Cross",
-        title: "Rail-friendly stays for a compact city visit",
-        price: "$240",
+        route: "San Francisco Union Square",
+        title: "Shopping district with great dining and workout rooms",
+        price: "$174",
         meta: "Central location"
       }
     ]
@@ -296,25 +296,25 @@ const pageDetails = {
       {
         className: "deal-card--mint",
         icon: <Sparkles size={22} />,
-        route: "Singapore highlights",
-        title: "A food, gardens, and skyline plan for a long weekend",
-        price: "$620",
+        route: "Los Angeles highlights",
+        title: "A beach, culture, and coastal plan for a long weekend",
+        price: "$966",
         meta: "Estimated trip total"
       },
       {
         className: "deal-card--coral",
         icon: <Sparkles size={22} />,
-        route: "Tokyo first-timer",
-        title: "A practical city plan with rail-friendly neighborhoods",
-        price: "$920",
+        route: "Chicago highlights",
+        title: "A practical city plan with museums and great food",
+        price: "$524",
         meta: "Five-day estimate"
       },
       {
         className: "deal-card--gold",
         icon: <Sparkles size={22} />,
-        route: "Dubai highlights",
-        title: "A polished three-day plan with room to wander",
-        price: "$780",
+        route: "Miami highlights",
+        title: "A polished three-day beach and nightlife plan",
+        price: "$924",
         meta: "Estimated trip total"
       }
     ]

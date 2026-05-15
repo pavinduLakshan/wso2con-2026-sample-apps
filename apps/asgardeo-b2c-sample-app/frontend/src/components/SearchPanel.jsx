@@ -229,7 +229,7 @@ function DateField({ defaultValue, isOpen, onOpen, onClose }) {
 }
 
 function TravelersField({ defaultValue, isOpen, onOpen, onClose }) {
-  const [adults, setAdults] = useState(2);
+  const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0);
   const displayValue =
     `${adults} adult${adults === 1 ? "" : "s"}${children > 0 ? `, ${children} child${children === 1 ? "" : "ren"}` : ""}` ||
@@ -428,7 +428,7 @@ export function SearchPanel({
       <form className={`search-grid search-grid--${category}`} onSubmit={handleSubmit}>
         {!isHotelSearch && (
           <LocationField
-            defaultValue={initialCriteria?.from || "Colombo"}
+            defaultValue={initialCriteria?.from || "New York"}
             icon={<MapPin size={18} />}
             isOpen={openDropdown === "from"}
             label="From"
@@ -440,7 +440,7 @@ export function SearchPanel({
           />
         )}
         <LocationField
-          defaultValue={initialCriteria?.to || "Singapore"}
+          defaultValue={initialCriteria?.to || "Los Angeles"}
           icon={isHotelSearch ? <MapPin size={18} /> : <Plane size={18} />}
           isOpen={openDropdown === "to"}
           label={isHotelSearch ? "Destination" : "To"}
