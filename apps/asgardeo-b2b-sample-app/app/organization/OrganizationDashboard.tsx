@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import WorkspaceShell from "../WorkspaceShell";
+import { useAuth } from "../lib/auth/client";
 import { UserRole } from "../lib/auth/utils";
 
 type Tab = "users" | "roles" | "enterprise-idp";
@@ -13,10 +14,9 @@ interface Employee {
   id: string;
   name: string;
   email: string;
-  department: string;
   role: RoleName;
   status: UserStatus;
-  lastLogin: string;
+  userName?: string;
 }
 
 interface RoleDef {
@@ -51,16 +51,6 @@ const ROLES: RoleDef[] = [
   { name: "Advanced-Branding-Editor", description: "Can edit advanced branding settings.", permissions: ["Basic Branding", "Advanced Branding"] },
 ];
 
-const INITIAL_EMPLOYEES: Employee[] = [
-  { id: "u1", name: "Ava Fernando", email: "ava.fernando@acme.example", department: "Marketing", role: "Member", status: "Active", lastLogin: "May 14, 2026 09:22" },
-  { id: "u2", name: "Maya Silva", email: "maya.silva@acme.example", department: "Operations", role: "Idp-Manager", status: "Active", lastLogin: "May 15, 2026 08:04" },
-  { id: "u3", name: "Nimal Perera", email: "nimal.perera@acme.example", department: "Engineering", role: "Member", status: "Locked", lastLogin: "May 10, 2026 14:02" },
-  { id: "u4", name: "Priya Jayawardena", email: "priya.j@acme.example", department: "Human Resources", role: "Admin", status: "Active", lastLogin: "May 13, 2026 14:30" },
-  { id: "u5", name: "Tomas Ruiz", email: "tomas.ruiz@acme.example", department: "Finance", role: "Admin", status: "Active", lastLogin: "May 15, 2026 10:18" },
-  { id: "u6", name: "Lisa Chen", email: "lisa.chen@acme.example", department: "Sales", role: "Member", status: "Locked", lastLogin: "Apr 28, 2026 16:44" },
-  { id: "u7", name: "James Park", email: "james.park@acme.example", department: "Marketing", role: "Basic-Branding-Editor", status: "Active", lastLogin: "May 12, 2026 11:15" },
-  { id: "u8", name: "Sara Kim", email: "sara.kim@acme.example", department: "Design", role: "Advanced-Branding-Editor", status: "Active", lastLogin: "May 11, 2026 14:30" },
-];
 
 const PAGE_SIZE = 5;
 
@@ -73,8 +63,11 @@ const TABS: { id: Tab; label: string; paid?: boolean }[] = [
 const EMPTY_IDP: IdpConfig = { clientId: "", clientSecret: "", authorizationEndpoint: "", tokenEndpoint: "", jwksEndpoint: "" };
 
 export default function OrganizationDashboard({ role }: { role: UserRole }) {
+  const { accessToken } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("users");
-  const [employees, setEmployees] = useState<Employee[]>(INITIAL_EMPLOYEES);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [usersError, setUsersError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
@@ -93,8 +86,36 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<RoleName>("Member");
   const [inviteSent, setInviteSent] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   const isPremium = showPremiumPreview;
+
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    setUsersLoading(true);
+    setUsersError(null);
+    fetch("/api/organization/users", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+      .then((res) => res.json())
+      .then((data: { users?: Employee[]; message?: string }) => {
+        if (cancelled) return;
+        if (Array.isArray(data.users)) {
+          setEmployees(data.users.map((u) => ({ ...u, role: u.role ?? "Member" })));
+        } else {
+          setUsersError(data.message ?? "Failed to load users.");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setUsersError("Failed to load users.");
+      })
+      .finally(() => {
+        if (!cancelled) setUsersLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [accessToken]);
 
   const filteredEmployees = employees.filter(
     (u) => !search || u.name.toLowerCase().includes(search.toLowerCase())
@@ -151,23 +172,51 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
     setInviteEmail("");
     setInviteRole("Member");
     setInviteSent(false);
+    setInviteError(null);
     setShowInviteModal(true);
   }
 
-  function handleInviteSubmit() {
-    if (!inviteEmail.trim()) return;
-    const nameFromEmail = inviteEmail.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-    const newUser: Employee = {
-      id: `u${Date.now()}`,
-      name: nameFromEmail,
-      email: inviteEmail.trim().toLowerCase(),
-      department: "—",
-      role: inviteRole,
-      status: "Active",
-      lastLogin: "Never",
-    };
-    setEmployees((prev) => [newUser, ...prev]);
-    setInviteSent(true);
+  async function handleInviteSubmit() {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email) return;
+
+    setInviteLoading(true);
+    setInviteError(null);
+
+    try {
+      const res = await fetch("/api/organization/users", {
+        body: JSON.stringify({ email, role: inviteRole }),
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setInviteError((data as { message?: string }).message ?? "Failed to invite user. Please try again.");
+        return;
+      }
+
+      const nameFromEmail = email.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      setEmployees((prev) => [
+        {
+          id: (data as { user?: { id?: string } }).user?.id ?? `u${Date.now()}`,
+          name: nameFromEmail,
+          email,
+          role: inviteRole,
+          status: "Active",
+        },
+        ...prev,
+      ]);
+      setInviteSent(true);
+    } catch {
+      setInviteError("Failed to invite user. Please try again.");
+    } finally {
+      setInviteLoading(false);
+    }
   }
 
   function handleIdpSave() {
@@ -250,38 +299,46 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
               </div>
             </div>
 
-            <div className="org-user-table" role="table" aria-label="Employee directory">
-              <div className="org-user-table-head" role="row">
-                <span>Name</span>
-                <span>Email</span>
-                <span>Status</span>
-                <span />
-              </div>
-              {pagedEmployees.map((user) => (
-                <div className="org-user-table-row" key={user.id} role="row">
-                  <strong>{user.name}</strong>
-                  <span className="cell-muted">{user.email}</span>
-                  <span>
-                    <em className={`status-badge status-badge--${user.status.toLowerCase()}`}>
-                      {user.status}
-                    </em>
-                  </span>
-                  <button
-                    className="org-edit-btn"
-                    type="button"
-                    aria-label={`Edit ${user.name}`}
-                    onClick={() => setEditUser(user)}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                      <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
+            {usersLoading ? (
+              <p className="empty-state">Loading users…</p>
+            ) : usersError ? (
+              <p className="empty-state" style={{ color: "var(--app-error, #b91c1c)" }}>{usersError}</p>
+            ) : (
+              <>
+                <div className="org-user-table" role="table" aria-label="Employee directory">
+                  <div className="org-user-table-head" role="row">
+                    <span>Name</span>
+                    <span>Email</span>
+                    <span>Status</span>
+                    <span />
+                  </div>
+                  {pagedEmployees.map((user) => (
+                    <div className="org-user-table-row" key={user.id} role="row">
+                      <strong>{user.name}</strong>
+                      <span className="cell-muted">{user.email}</span>
+                      <span>
+                        <em className={`status-badge status-badge--${user.status.toLowerCase()}`}>
+                          {user.status}
+                        </em>
+                      </span>
+                      <button
+                        className="org-edit-btn"
+                        type="button"
+                        aria-label={`Edit ${user.name}`}
+                        onClick={() => setEditUser(user)}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <path d="M11.5 2.5a1.414 1.414 0 0 1 2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            {filteredEmployees.length === 0 && (
-              <p className="empty-state">No users match your search.</p>
+                {filteredEmployees.length === 0 && (
+                  <p className="empty-state">No users match your search.</p>
+                )}
+              </>
             )}
 
             {totalPages > 1 && (
@@ -561,7 +618,7 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
                   <h4>Invitation sent!</h4>
                   <p>An invite email has been sent to <strong>{inviteEmail}</strong>. They&apos;ll be added as <strong>{inviteRole}</strong> once they accept.</p>
                   <div className="action-cluster" style={{ justifyContent: "center", marginTop: "8px" }}>
-                    <button className="button button-secondary" type="button" onClick={() => { setInviteSent(false); setInviteEmail(""); setInviteRole("Member"); }}>
+                    <button className="button button-secondary" type="button" onClick={() => { setInviteSent(false); setInviteEmail(""); setInviteRole("Member"); setInviteError(null); }}>
                       Invite another
                     </button>
                     <button className="button button-primary" type="button" onClick={() => setShowInviteModal(false)}>
@@ -595,7 +652,7 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
                         type="email"
                         value={inviteEmail}
                         onChange={(e) => setInviteEmail(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") handleInviteSubmit(); }}
+                        onKeyDown={(e) => { if (e.key === "Enter" && !inviteLoading) handleInviteSubmit(); }}
                       />
                     </label>
 
@@ -620,17 +677,27 @@ export default function OrganizationDashboard({ role }: { role: UserRole }) {
                     <span>{ROLES.find((r) => r.name === inviteRole)?.permissions.join(", ")}</span>
                   </div>
 
+                  {inviteError && (
+                    <div className="form-error" role="alert" style={{ display: "flex", gap: "10px", alignItems: "flex-start", marginTop: "16px" }}>
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ flexShrink: 0, marginTop: "2px" }}>
+                        <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+                        <path d="M8 5v3.5M8 11h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                      </svg>
+                      <span style={{ fontSize: "0.86rem" }}>{inviteError}</span>
+                    </div>
+                  )}
+
                   <div className="action-cluster" style={{ marginTop: "20px", justifyContent: "flex-end" }}>
-                    <button className="button button-secondary" type="button" onClick={() => setShowInviteModal(false)}>
+                    <button className="button button-secondary" type="button" disabled={inviteLoading} onClick={() => setShowInviteModal(false)}>
                       Cancel
                     </button>
                     <button
                       className="button button-primary"
                       type="button"
-                      disabled={!inviteEmail.trim()}
+                      disabled={!inviteEmail.trim() || inviteLoading}
                       onClick={handleInviteSubmit}
                     >
-                      Send invitation
+                      {inviteLoading ? "Sending…" : "Send invitation"}
                     </button>
                   </div>
                 </>
