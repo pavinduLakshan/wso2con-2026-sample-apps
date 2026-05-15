@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import WorkspaceShell from "../WorkspaceShell";
-import { useAuth } from "../lib/auth-client";
-import { getRoleFromPermissions, UserRole } from "../lib/auth";
+import { useAuth } from "../lib/auth/client";
+import { getRoleFromPermissions, UserRole } from "../lib/auth/utils";
 
 const managementCapabilities = [
   {

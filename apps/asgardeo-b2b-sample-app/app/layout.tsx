@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { AuthProvider } from "./lib/auth-client";
+import { AuthProvider } from "./lib/auth/client";
 import "./globals.css";
 
 export const metadata: Metadata = {

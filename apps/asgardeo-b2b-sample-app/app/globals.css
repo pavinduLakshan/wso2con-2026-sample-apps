@@ -2774,6 +2774,45 @@ strong {
   }
 }
 
+/* ── Workspace Loader (circular spinner) ───────────────────────── */
+
+.ws-loader {
+  backdrop-filter: blur(4px);
+  background: rgba(246, 248, 251, 0.86);
+  inset: 0;
+  position: absolute;
+  z-index: 10;
+}
+
+.ws-loader-content {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100vh;
+  justify-content: center;
+  position: sticky;
+  top: 0;
+}
+
+.ws-spinner {
+  animation: ws-spin 0.85s linear infinite;
+  color: var(--app-primary);
+  height: 44px;
+  width: 44px;
+}
+
+@keyframes ws-spin {
+  to { transform: rotate(360deg); }
+}
+
+.ws-loader-label {
+  color: var(--app-muted);
+  font-size: 0.88rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
 /* ── Onboarding Success ─────────────────────────────────────── */
 
 .success-icon-wrap {
