@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { headers } from "next/headers";
 import { AuthProvider } from "./lib/auth/client";
+import { BrandingProvider } from "./lib/branding/BrandingProvider";
 import "./globals.css";
 
 const inter = Inter({
@@ -36,7 +37,9 @@ export default async function RootLayout({
     <html lang="en" className={inter.className}>
       <body>
         <AuthProvider initialIsExchanging={hasCode || hasOrgId}>
-          {children}
+          <BrandingProvider>
+            {children}
+          </BrandingProvider>
         </AuthProvider>
       </body>
     </html>

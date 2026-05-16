@@ -827,7 +827,6 @@ export async function brandingCreate(
   orgId: string,
   config: BrandingConfig
 ): Promise<void> {
-  console.log(`${getBaseUrl()}/o/api/server/v1/branding-preference`)
   const response = await fetch(`${getBaseUrl()}/o/api/server/v1/branding-preference`, {
     method: "POST",
     headers: {
