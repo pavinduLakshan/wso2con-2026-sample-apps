@@ -486,7 +486,7 @@ export default function PersonalizationDashboard({ roles }: { roles: UserRole[] 
         setForm(data.branding);
       }
       setSaveSuccess(true);
-      successTimerRef.current = setTimeout(() => setSaveSuccess(false), 4000);
+      successTimerRef.current = setTimeout(() => window.location.reload(), 1500);
     } catch {
       setSaveError("Failed to save branding.");
     } finally {

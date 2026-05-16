@@ -20,6 +20,7 @@
   --app-primary: #1d4ed8;
   --app-primary-soft: #e8efff;
   --app-primary-soft-border: #c9d8ff;
+  --app-sidebar: #0f172a;
 }
 
 * {
@@ -792,7 +793,6 @@ strong {
   --app-card: #ffffff;
   --app-ink: #0f172a;
   --app-muted: #64748b;
-  --app-sidebar: #0f172a;
   --app-sidebar-muted: #94a3b8;
   --app-success-bg: #eefbf4;
   --app-success: #047857;
@@ -3705,7 +3705,7 @@ select.form-field-input {
 
 .agent-chat-header {
   align-items: center;
-  background: #061a33;
+  background: var(--navy);
   color: #ffffff;
   display: flex;
   gap: 16px;

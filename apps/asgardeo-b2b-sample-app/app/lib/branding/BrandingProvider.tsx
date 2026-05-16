@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import LoadingScreen from "../../LoadingScreen";
 import { useAuth } from "../auth/client";
 
 export interface BrandingConfig {
@@ -17,9 +18,10 @@ export interface BrandingConfig {
 
 interface BrandingState {
   branding: BrandingConfig | null;
+  brandingResolved: boolean;
 }
 
-const BrandingContext = createContext<BrandingState>({ branding: null });
+const BrandingContext = createContext<BrandingState>({ branding: null, brandingResolved: false });
 
 function hexToRgb(hex: string): [number, number, number] {
   return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
@@ -36,13 +38,24 @@ function hexToDark(hex: string): string {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
+function hexToSidebar(hex: string): string {
+  const [r, g, b] = hexToRgb(hex);
+  const toHex = (n: number) => Math.max(Math.round(n * 0.12), 0).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
 export function BrandingProvider({ children }: { children: ReactNode }) {
   const { accessToken, isSignedIn } = useAuth();
   const [branding, setBranding] = useState<BrandingConfig | null>(null);
+  const [brandingResolved, setBrandingResolved] = useState(false);
 
   useEffect(() => {
-    if (!isSignedIn || !accessToken) return;
+    if (!isSignedIn || !accessToken) {
+      setBrandingResolved(true);
+      return;
+    }
 
+    setBrandingResolved(false);
     fetch("/api/organization/branding", {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
@@ -50,7 +63,10 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
       .then((data: { branding?: BrandingConfig | null }) => {
         setBranding(data.branding ?? null);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        setBrandingResolved(true);
+      });
   }, [isSignedIn, accessToken]);
 
   useEffect(() => {
@@ -75,6 +91,8 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--app-primary", branding.primaryColor);
     root.style.setProperty("--app-primary-soft", hexToSoft(branding.primaryColor));
     root.style.setProperty("--app-primary-soft-border", `rgba(${pr}, ${pg}, ${pb}, 0.3)`);
+    root.style.setProperty("--app-sidebar", hexToSidebar(branding.primaryColor));
+    root.style.setProperty("--navy", hexToSidebar(branding.primaryColor));
 
     if (branding.fontImportUrl) {
       const styleId = "branding-font-import";
@@ -98,8 +116,8 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   }, [branding]);
 
   return (
-    <BrandingContext.Provider value={{ branding }}>
-      {children}
+    <BrandingContext.Provider value={{ branding, brandingResolved }}>
+      {brandingResolved ? children : <LoadingScreen steps={[]} title="Loading your workspace…" />}
     </BrandingContext.Provider>
   );
 }
