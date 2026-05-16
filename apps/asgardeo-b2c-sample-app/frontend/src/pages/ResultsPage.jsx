@@ -17,15 +17,15 @@ import { buildFlightDetailsPath } from "../utils/routes";
 function extractFavoriteFlightIds(profile) {
   const normalizedProfile = profile?.data || profile?.profile || profile || {};
   const applicationData = normalizedProfile?.application_data || normalizedProfile?.applicationData || {};
-  const appScopedFavorites = applicationData?.[ASGARDEO_CLIENT_ID]?.flight_no;
+  const appScopedFavorites = applicationData?.[ASGARDEO_CLIENT_ID]?.fav_flights;
 
   if (Array.isArray(appScopedFavorites)) {
     return appScopedFavorites.map((id) => `${id}`);
   }
 
   for (const appData of Object.values(applicationData)) {
-    if (Array.isArray(appData?.flight_no)) {
-      return appData.flight_no.map((id) => `${id}`);
+    if (Array.isArray(appData?.fav_flights)) {
+      return appData.fav_flights.map((id) => `${id}`);
     }
   }
 
@@ -297,7 +297,7 @@ export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations,
         await updateCDSProfile(cdsProfileId, {
           application_data: {
             [ASGARDEO_CLIENT_ID]: {
-              flight_no: favoritedFlights
+              fav_flights: favoritedFlights
             }
           }
         });
