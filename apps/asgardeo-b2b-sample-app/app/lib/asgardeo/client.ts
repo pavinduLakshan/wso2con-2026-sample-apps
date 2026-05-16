@@ -517,6 +517,107 @@ export async function shareApplicationRoles(
   };
 }
 
+export async function appGetIdByName(accessToken: string, appName: string): Promise<string | null> {
+  const filter = encodeURIComponent(`name eq ${appName}`);
+  const response = await fetch(`${getBaseUrl()}/o/api/server/v1/applications?filter=${filter}`, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  const json = await response.json().catch(() => ({})) as Record<string, unknown>;
+
+  if (!response.ok) {
+    const message =
+      typeof json?.description === "string" ? json.description :
+      typeof json?.message === "string" ? json.message :
+      "Failed to fetch applications.";
+    console.error("[asgardeo/client] appGetIdByName failed:", response.status, JSON.stringify(json));
+    throw new Error(message);
+  }
+
+  const applications = json?.applications as Array<Record<string, unknown>> | undefined;
+  if (!Array.isArray(applications) || applications.length === 0) return null;
+  return typeof applications[0]?.id === "string" ? applications[0].id : null;
+}
+
+export async function appAddIdpToAuthSequence(accessToken: string, appId: string, idpName: string): Promise<void> {
+  const response = await fetch(`${getBaseUrl()}/o/api/server/v1/applications/${appId}`, {
+    method: "PATCH",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      authenticationSequence: {
+        attributeStepId: 1,
+        requestPathAuthenticators: [],
+        steps: [
+          {
+            id: 1,
+            options: [
+              { idp: "LOCAL", authenticator: "BasicAuthenticator" },
+              { authenticator: "OpenIDConnectAuthenticator", idp: idpName },
+            ],
+          },
+        ],
+        subjectStepId: 1,
+        type: "USER_DEFINED",
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const json = await response.json().catch(() => ({})) as Record<string, unknown>;
+    const message =
+      typeof json?.description === "string" ? json.description :
+      typeof json?.message === "string" ? json.message :
+      "Failed to update application authentication sequence.";
+    console.error("[asgardeo/client] appAddIdpToAuthSequence failed:", response.status, JSON.stringify(json));
+    throw new Error(message);
+  }
+}
+
+export async function appRemoveIdpFromAuthSequence(accessToken: string, appId: string): Promise<void> {
+  const response = await fetch(`${getBaseUrl()}/o/api/server/v1/applications/${appId}`, {
+    method: "PATCH",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      authenticationSequence: {
+        attributeStepId: 1,
+        requestPathAuthenticators: [],
+        steps: [
+          {
+            id: 1,
+            options: [
+              { idp: "LOCAL", authenticator: "BasicAuthenticator" },
+            ],
+          },
+        ],
+        subjectStepId: 1,
+        type: "USER_DEFINED",
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const json = await response.json().catch(() => ({})) as Record<string, unknown>;
+    const message =
+      typeof json?.description === "string" ? json.description :
+      typeof json?.message === "string" ? json.message :
+      "Failed to update application authentication sequence.";
+    console.error("[asgardeo/client] appRemoveIdpFromAuthSequence failed:", response.status, JSON.stringify(json));
+    throw new Error(message);
+  }
+}
+
 export async function scimAssignRoleToUser(accessToken: string, roleId: string, userId: string): Promise<void> {
   const response = await fetch(`${getBaseUrl()}/o/scim2/v2/Roles/${roleId}`, {
     body: JSON.stringify({

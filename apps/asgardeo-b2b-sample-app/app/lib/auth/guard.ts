@@ -44,23 +44,30 @@ export async function requireAuth(
   }
 }
 
+export type ScopePolicy = "any" | "all";
+
 /**
- * Like requireAuth, but also enforces that the caller has at least one of the required scopes.
- * Returns a 403 response when the token is valid but the scope requirement is not met.
+ * Like requireAuth, but also enforces scope requirements on the token.
+ * policy "any" (default): passes if the token has at least one of the listed scopes.
+ * policy "all": passes only if the token has every listed scope.
  *
- *   const auth = await requireScope(request, ["internal_org_user_mgt_list"]);
+ *   const auth = await requireScope(request, [Scope.IDP_VIEW]);
+ *   const auth = await requireScope(request, [Scope.IDP_CREATE, Scope.APP_MGT_VIEW, Scope.APP_MGT_UPDATE], "all");
  *   if (auth instanceof NextResponse) return auth;
  */
 export async function requireScope(
   request: NextRequest,
-  requiredScopes: string[]
+  requiredScopes: string[],
+  policy: ScopePolicy = "any"
 ): Promise<{ claims: TokenClaims } | NextResponse> {
   const result = await requireAuth(request);
   if (result instanceof NextResponse) return result;
 
-  const hasScope = requiredScopes.some((s) => result.claims.scopes.includes(s));
+  const check = policy === "all"
+    ? requiredScopes.every((s) => result.claims.scopes.includes(s))
+    : requiredScopes.some((s) => result.claims.scopes.includes(s));
 
-  if (!hasScope) {
+  if (!check) {
     return NextResponse.json({ error: "Insufficient permissions." }, { status: 403 });
   }
 
