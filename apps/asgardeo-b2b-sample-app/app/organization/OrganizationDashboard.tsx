@@ -7,7 +7,7 @@ import { UserRole } from "../lib/auth/utils";
 
 type Tab = "users" | "roles";
 type UserStatus = "Active" | "Locked";
-type RoleName = "Admin" | "Member" | "Idp-Manager" | "Basic-Branding-Editor" | "Advanced-Branding-Editor";
+type RoleName = "Admin" | "Member" | "Idp Manager" | "Basic Branding Editor" | "Advanced Branding Editor";
 type Permission = "Flight Booking" | "Travel Policy" | "Impersonate" | "IDP Configure" | "Basic Branding" | "Advanced Branding" | "User Mgt";
 
 interface Employee {
@@ -44,9 +44,9 @@ const ALL_PERMISSIONS: Permission[] = [
 const ROLES: RoleDef[] = [
   { name: "Admin", description: "Full access to all features and settings.", permissions: [...ALL_PERMISSIONS] },
   { name: "Member", description: "Can book flights for personal travel.", permissions: ["Flight Booking"] },
-  { name: "Idp-Manager", description: "Can configure enterprise identity providers.", permissions: ["IDP Configure"] },
-  { name: "Basic-Branding-Editor", description: "Can edit basic branding settings.", permissions: ["Basic Branding"] },
-  { name: "Advanced-Branding-Editor", description: "Can edit advanced branding settings.", permissions: ["Basic Branding", "Advanced Branding"] },
+  { name: "Idp Manager", description: "Can configure enterprise identity providers.", permissions: ["IDP Configure"] },
+  { name: "Basic Branding Editor", description: "Can edit basic branding settings.", permissions: ["Basic Branding"] },
+  { name: "Advanced Branding Editor", description: "Can edit advanced branding settings.", permissions: ["Basic Branding", "Advanced Branding"] },
 ];
 
 

@@ -1,0 +1,142 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireScope } from "../../../lib/auth/guard";
+import { Scope, Tier } from "../../../lib/auth/utils";
+import { getOrgTier, upsertOrgTier } from "../../../lib/db/queries/org-tiers";
+import { shareApplicationRoles } from "../../../lib/asgardeo/client";
+
+const baseUrl = (process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL ?? "").replace(/\/$/, "");
+const clientId = process.env.ASGARDEO_CLIENT_ID ?? process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID ?? "";
+const clientSecret = process.env.ASGARDEO_CLIENT_SECRET ?? "";
+const applicationId = process.env.ASGARDEO_APP_ID ?? "";
+const appDisplayName = process.env.ASGARDEO_APP_DISPLAY_NAME ?? "Wayfinder";
+const appSharingScopes = process.env.ASGARDEO_APP_SHARING_SCOPES ?? "internal_application_mgt_update";
+
+const basicBrandingEditorRole =
+  process.env.NEXT_PUBLIC_ASGARDEO_BASIC_BRANDING_EDITOR_ROLE_NAME ?? "Basic-Branding-Editor";
+const advancedBrandingEditorRole =
+  process.env.NEXT_PUBLIC_ASGARDEO_ADVANCED_BRANDING_EDITOR_ROLE_NAME ?? "Advanced-Branding-Editor";
+const idpManagerRole =
+  process.env.NEXT_PUBLIC_ASGARDEO_IDP_MANAGER_ROLE_NAME ?? "IdP-Manager";
+
+function getRolesForTier(tier: Tier): string[] {
+  if (tier === Tier.BASIC) return [basicBrandingEditorRole];
+  if (tier === Tier.ADVANCED) return [basicBrandingEditorRole, advancedBrandingEditorRole, idpManagerRole];
+  return [];
+}
+
+async function getRootToken(): Promise<string> {
+  const response = await fetch(`${baseUrl}/oauth2/token`, {
+    method: "POST",
+    body: new URLSearchParams({ grant_type: "client_credentials", scope: appSharingScopes }),
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+  });
+
+  const json = await response.json().catch(() => ({})) as { access_token?: string; error_description?: string };
+
+  if (!response.ok || !json.access_token) {
+    throw new Error(json.error_description ?? "Failed to get management token for application sharing.");
+  }
+
+  return json.access_token;
+}
+
+export async function GET(request: NextRequest) {
+  const auth = await requireScope(request, [Scope.UPGRADE_VIEW]);
+  if (auth instanceof NextResponse) return auth;
+
+  const { orgId } = auth.claims;
+  const record = getOrgTier(orgId);
+
+  return NextResponse.json({ tier: (record?.tier ?? Tier.FREE) as Tier });
+}
+
+export async function POST(request: NextRequest) {
+  const auth = await requireScope(request, [Scope.UPGRADE_CREATE]);
+  if (auth instanceof NextResponse) return auth;
+
+  const { orgId } = auth.claims;
+
+  let tier: Tier;
+  try {
+    const body = await request.json() as { tier?: string };
+    if (body.tier !== Tier.BASIC && body.tier !== Tier.ADVANCED) {
+      return NextResponse.json({ error: "Invalid tier. Must be BASIC or ADVANCED." }, { status: 422 });
+    }
+    tier = body.tier as Tier;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+
+  if (applicationId) {
+    try {
+      const rootToken = await getRootToken();
+      const roles = getRolesForTier(tier);
+      if (roles.length > 0) {
+        await shareApplicationRoles(rootToken, orgId, roles, applicationId, appDisplayName);
+      }
+    } catch (err) {
+      console.error("[upgrade] Application role sharing failed:", err);
+      return NextResponse.json(
+        { error: "Upgrade failed. Please check your configuration and try again." },
+        { status: 500 }
+      );
+    }
+  } else {
+    console.warn("[upgrade] ASGARDEO_APP_ID not configured — skipping application role sharing.");
+  }
+
+  upsertOrgTier(orgId, tier);
+
+  return NextResponse.json({ tier }, { status: 202 });
+}
+
+export async function PUT(request: NextRequest) {
+  const auth = await requireScope(request, [Scope.UPGRADE_UPDATE]);
+  if (auth instanceof NextResponse) return auth;
+
+  const { orgId } = auth.claims;
+
+  let tier: Tier;
+  try {
+    const body = await request.json() as { tier?: string };
+    if (body.tier !== Tier.BASIC && body.tier !== Tier.ADVANCED) {
+      return NextResponse.json({ error: "Invalid tier. Must be BASIC or ADVANCED." }, { status: 422 });
+    }
+    tier = body.tier as Tier;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+
+  if (applicationId) {
+    try {
+      const rootToken = await getRootToken();
+      const roles = getRolesForTier(tier);
+      if (roles.length > 0) {
+        await shareApplicationRoles(rootToken, orgId, roles, applicationId, appDisplayName);
+      }
+    } catch (err) {
+      console.error("[upgrade] Application role sharing failed:", err);
+      return NextResponse.json(
+        { error: "Upgrade failed. Please check your configuration and try again." },
+        { status: 500 }
+      );
+    }
+  }
+
+  upsertOrgTier(orgId, tier);
+
+  return NextResponse.json({ tier }, { status: 202 });
+}
+
+export async function DELETE(request: NextRequest) {
+  const auth = await requireScope(request, [Scope.UPGRADE_DELETE]);
+  if (auth instanceof NextResponse) return auth;
+
+  const { orgId } = auth.claims;
+  upsertOrgTier(orgId, Tier.FREE);
+
+  return NextResponse.json({ tier: Tier.FREE });
+}

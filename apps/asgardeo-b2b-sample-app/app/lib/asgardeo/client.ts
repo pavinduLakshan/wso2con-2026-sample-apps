@@ -410,6 +410,54 @@ export async function idpDelete(accessToken: string, idpId: string): Promise<voi
   }
 }
 
+export async function shareApplicationRoles(
+  accessToken: string,
+  orgId: string,
+  roleNames: string[],
+  applicationId: string,
+  appDisplayName: string
+): Promise<{ status: string; details: string }> {
+  const baseUrl = getBaseUrl();
+
+  const response = await fetch(`${baseUrl}/api/server/v1/applications/share`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      Operations: [
+        {
+          op: "add",
+          path: `organizations[orgId eq "${orgId}"].roles`,
+          value: roleNames.map((displayName) => ({
+            audience: { display: appDisplayName, type: "application" },
+            displayName,
+          })),
+        },
+      ],
+      applicationId,
+    }),
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  const json = await response.json().catch(() => ({})) as Record<string, unknown>;
+
+  if (!response.ok && response.status !== 202) {
+    const message =
+      typeof json?.message === "string" ? json.message :
+      typeof json?.description === "string" ? json.description :
+      "Failed to share application roles.";
+    console.error("[asgardeo/client] shareApplicationRoles failed:", response.status, JSON.stringify(json));
+    throw new Error(message);
+  }
+
+  return {
+    status: typeof json?.status === "string" ? json.status : "Processing",
+    details: typeof json?.details === "string" ? json.details : "Application sharing process triggered.",
+  };
+}
+
 export async function scimAssignRoleToUser(accessToken: string, roleId: string, userId: string): Promise<void> {
   const response = await fetch(`${getBaseUrl()}/o/scim2/v2/Roles/${roleId}`, {
     body: JSON.stringify({

@@ -16,3 +16,10 @@ CREATE TABLE IF NOT EXISTS enterprise_idps (
   idp_name   TEXT    NOT NULL,
   updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS org_tiers (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id     TEXT    NOT NULL UNIQUE,
+  tier       TEXT    NOT NULL DEFAULT 'FREE',
+  updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+);
