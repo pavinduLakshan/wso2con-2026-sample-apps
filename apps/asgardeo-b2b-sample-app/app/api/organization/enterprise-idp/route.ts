@@ -53,7 +53,7 @@ function validateConfig(body: CreateBody): IdpConfig | NextResponse {
   if (!authorizationEndpoint?.trim()) return NextResponse.json({ error: "authorizationEndpoint is required." }, { status: 422 });
   if (!tokenEndpoint?.trim()) return NextResponse.json({ error: "tokenEndpoint is required." }, { status: 422 });
 
-  return { name: name.trim(), clientId: clientId.trim(), clientSecret: clientSecret.trim(), authorizationEndpoint: authorizationEndpoint.trim(), tokenEndpoint: tokenEndpoint.trim(), logoutEndpoint: logoutEndpoint?.trim() || undefined, jwksUri: jwksUri?.trim() || undefined };
+  return { orgId: "" as string, name: name.trim(), clientId: clientId.trim(), clientSecret: clientSecret.trim(), authorizationEndpoint: authorizationEndpoint.trim(), tokenEndpoint: tokenEndpoint.trim(), logoutEndpoint: logoutEndpoint?.trim() || undefined, jwksUri: jwksUri?.trim() || undefined };
 }
 
 export async function POST(request: NextRequest) {
@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
   if (config instanceof NextResponse) return config;
 
   const { orgId } = auth.claims;
+  config.orgId = orgId;
   const accessToken = request.headers.get("authorization")!.slice(7);
 
   try {
@@ -105,6 +106,7 @@ export async function PUT(request: NextRequest) {
   const config = validateConfig(body);
   if (config instanceof NextResponse) return config;
 
+  config.orgId = orgId;
   const accessToken = request.headers.get("authorization")!.slice(7);
 
   try {

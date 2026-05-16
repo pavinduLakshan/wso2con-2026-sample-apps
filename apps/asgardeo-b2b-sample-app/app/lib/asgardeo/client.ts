@@ -234,6 +234,7 @@ export async function scimUpdateRoleUsers(
 }
 
 export interface IdpConfig {
+  orgId: string;
   name: string;
   clientId: string;
   clientSecret: string;
@@ -255,8 +256,8 @@ export interface IdpDetail {
 }
 
 function buildIdpPayload(config: IdpConfig): Record<string, unknown> {
-  const baseUrl = getBaseUrl();
-  const callbackUrl = `${baseUrl}/commonauth`;
+  const baseUrl = getBaseUrl().replace(/\/t\/[^/]+$/, "");
+  const callbackUrl = `${baseUrl}/o/${config.orgId}/commonauth`;
 
   return {
     image: "assets/images/logos/enterprise.svg",
@@ -394,7 +395,7 @@ export async function idpGet(accessToken: string, idpId: string): Promise<IdpDet
 export async function idpUpdate(accessToken: string, idpId: string, config: IdpConfig): Promise<IdpDetail> {
   const baseUrl = getBaseUrl();
   const authenticatorId = "T3BlbklEQ29ubmVjdEF1dGhlbnRpY2F0b3I";
-  const callbackUrl = `${baseUrl}/commonauth`;
+  const callbackUrl = `${baseUrl.replace(/\/t\/[^/]+$/, "")}/o/${config.orgId}/commonauth`;
 
   // PATCH the IDP for name and certificate (jwksUri) — the only fields supported by the main endpoint.
   const patchRes = await fetch(`${baseUrl}/o/api/server/v1/identity-providers/${idpId}`, {
@@ -514,6 +515,54 @@ export async function shareApplicationRoles(
   return {
     status: typeof json?.status === "string" ? json.status : "Processing",
     details: typeof json?.details === "string" ? json.details : "Application sharing process triggered.",
+  };
+}
+
+export async function removeApplicationRoles(
+  accessToken: string,
+  orgId: string,
+  roleNames: string[],
+  applicationId: string,
+  appDisplayName: string
+): Promise<{ status: string; details: string }> {
+  const baseUrl = getBaseUrl();
+
+  const response = await fetch(`${baseUrl}/api/server/v1/applications/share`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      Operations: [
+        {
+          op: "remove",
+          path: `organizations[orgId eq "${orgId}"].roles`,
+          value: roleNames.map((displayName) => ({
+            audience: { display: appDisplayName, type: "application" },
+            displayName,
+          })),
+        },
+      ],
+      applicationId,
+    }),
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  const json = await response.json().catch(() => ({})) as Record<string, unknown>;
+
+  if (!response.ok && response.status !== 202) {
+    const message =
+      typeof json?.message === "string" ? json.message :
+      typeof json?.description === "string" ? json.description :
+      "Failed to remove application roles.";
+    console.error("[asgardeo/client] removeApplicationRoles failed:", response.status, JSON.stringify(json));
+    throw new Error(message);
+  }
+
+  return {
+    status: typeof json?.status === "string" ? json.status : "Processing",
+    details: typeof json?.details === "string" ? json.details : "Application role removal process triggered.",
   };
 }
 

@@ -354,6 +354,7 @@ export default function BillingDashboard({ roles }: { roles: UserRole[] }) {
             borderRadius: "8px",
             color: "#b91c1c",
             fontSize: "14px",
+            marginBottom: "16px",
           }}
         >
           <span style={{ flex: 1 }}>{actionError}</span>
@@ -379,6 +380,7 @@ export default function BillingDashboard({ roles }: { roles: UserRole[] }) {
             borderRadius: "8px",
             fontSize: "14px",
             color: "var(--color-primary, #2563eb)",
+            marginBottom: "16px",
           }}
         >
           <SpinnerIcon />
@@ -422,6 +424,7 @@ export default function BillingDashboard({ roles }: { roles: UserRole[] }) {
             border: "1px solid var(--color-border, #e5e7eb)",
             borderRadius: "8px",
             fontSize: "14px",
+            marginBottom: "16px",
           }}
         >
           <div style={{ color: "var(--color-success, #16a34a)", flexShrink: 0 }}>
