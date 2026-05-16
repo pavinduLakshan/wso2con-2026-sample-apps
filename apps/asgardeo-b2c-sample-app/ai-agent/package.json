@@ -4,7 +4,8 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev": "tsx agent.ts",
+    "dev": "tsx watch agent.ts",
+    "start": "tsx agent.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -17,6 +18,7 @@
     "@langchain/langgraph": "^0.3.6",
     "@langchain/mcp-adapters": "^0.6.0",
     "dotenv": "^16.5.0",
+    "pino": "^9.14.0",
     "tsx": "^4.19.4"
   },
   "overrides": {

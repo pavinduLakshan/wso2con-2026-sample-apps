@@ -1,8 +1,10 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
+import { performance } from "node:perf_hooks";
 import { URL } from "node:url";
 import "dotenv/config";
-import { resolveUser } from "./auth.js";
+import { AuthError, authorizeRequest, resolveUser } from "./auth.js";
+import { logger } from "./logger.js";
 import {
   cancelBookedFlight,
   createBookingRecord,
@@ -25,6 +27,63 @@ import {
 
 const port = Number(process.env.PORT || 8787);
 const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
+const permissionPrefix = process.env.API_PERMISSION_PREFIX || "wayfinder:";
+
+function permission(area, action) {
+  const permissionName = `${area}:${action}`;
+
+  return permissionPrefix
+    ? [`${permissionPrefix}${permissionName}`, permissionName]
+    : [permissionName];
+}
+
+function getRoutePermissions(method, path) {
+  if (path === "/health" || method === "OPTIONS") {
+    return [];
+  }
+
+  if (path === "/api/flights") {
+    return method === "GET" ? permission("flights", "read") : permission("flights", "write");
+  }
+
+  if (path.startsWith("/api/flights/")) {
+    return method === "GET" ? permission("flights", "read") : permission("flights", "write");
+  }
+
+  if (path === "/api/hotels") {
+    return permission("hotels", "read");
+  }
+
+  if (path === "/api/locations") {
+    return permission("locations", "read");
+  }
+
+  if (path === "/api/trips") {
+    return permission("trips", "read");
+  }
+
+  if (path === "/api/me" || path === "/api/me/profile") {
+    return method === "PATCH" ? permission("profile", "write") : permission("profile", "read");
+  }
+
+  if (path === "/api/bookings" || path.startsWith("/api/bookings/")) {
+    return method === "GET" ? permission("bookings", "read") : permission("bookings", "write");
+  }
+
+  if (path === "/api/deal-alert-consents" || path.startsWith("/api/deal-alert-consents/")) {
+    return method === "GET" ? permission("deal-alerts", "read") : permission("deal-alerts", "write");
+  }
+
+  if (path === "/api/cds/profiles") {
+    return permission("cds-profiles", "write");
+  }
+
+  if (path.startsWith("/api/cds/profiles/")) {
+    return method === "GET" ? permission("cds-profiles", "read") : permission("cds-profiles", "write");
+  }
+
+  return [];
+}
 
 async function getCDSToken() {
   const baseUrl = process.env.ASGARDEO_BASE_URL;
@@ -145,6 +204,10 @@ function normalizeOptionalTags(value) {
   }
 
   return [];
+}
+
+function isAllowedPreference(value) {
+  return ["any", "earlier", "later"].includes(value);
 }
 
 function getBearerAccessToken(request: any) {
@@ -347,10 +410,10 @@ async function notifyAgentOfDealMatches(flight, matches) {
 
     if (!response.ok) {
       const message = await response.text().catch(() => "");
-      console.warn(`Deal alert webhook failed with ${response.status}: ${message}`);
+      logger.warn({ statusCode: response.status, message }, "Deal alert webhook failed");
     }
   } catch (error) {
-    console.warn("Deal alert webhook could not be reached:", error instanceof Error ? error.message : error);
+    logger.warn({ err: error }, "Deal alert webhook could not be reached");
   }
 }
 
@@ -444,7 +507,7 @@ async function handleFlightCreate(request) {
 
 async function handleBooking(request) {
   const body = await readJsonBody(request);
-  const resolvedUser = await resolveUser(request);
+  const resolvedUser = request.authenticatedUser || await resolveUser(request);
   const bodyUser = body.user && typeof body.user === "object" ? body.user : {};
   const canUseBodyUser = process.env.API_REQUIRE_AUTH !== "true";
   const user = canUseBodyUser && (bodyUser.username || bodyUser.email || bodyUser.id)
@@ -457,7 +520,7 @@ async function handleBooking(request) {
       }
     : resolvedUser;
   const itemType = body.type;
-  const itemId = body.itemId;
+  const itemId = typeof body.itemId === "string" ? body.itemId.trim() : body.itemId;
   const travelers = Number(body.travelers || 1);
   const username = user.username || user.email || user.id;
 
@@ -468,10 +531,17 @@ async function handleBooking(request) {
     };
   }
 
-  if (!itemId) {
+  if (typeof itemId !== "string" || !itemId.trim()) {
     return {
       statusCode: 400,
       body: { error: "itemId is required" }
+    };
+  }
+
+  if (!Number.isInteger(travelers) || travelers < 1 || travelers > 9) {
+    return {
+      statusCode: 400,
+      body: { error: "travelers must be an integer between 1 and 9" }
     };
   }
 
@@ -543,12 +613,49 @@ async function handleDealAlertConsent(request) {
     criteria.maxStops = body.maxStops === null || body.maxStops === "" ? null : Number(body.maxStops);
   }
 
-  if (criteria.datePreference === undefined && typeof body.datePreference === "string") {
-    criteria.datePreference = body.datePreference;
+  if (criteria.timePreference === undefined && typeof body.timePreference === "string") {
+    criteria.timePreference = body.timePreference;
+  }
+
+  if (criteria.timePreference === undefined && typeof body.datePreference === "string") {
+    criteria.timePreference = body.datePreference;
   }
 
   if (criteria.sameCabinOnly === undefined && body.sameCabinOnly !== undefined) {
     criteria.sameCabinOnly = Boolean(body.sameCabinOnly);
+  }
+
+  if (
+    criteria.timePreference !== undefined &&
+    !isAllowedPreference(String(criteria.timePreference))
+  ) {
+    return {
+      statusCode: 400,
+      body: { error: "timePreference must be one of: any, earlier, later" }
+    };
+  }
+
+  if (
+    criteria.minimumSavingsPercent !== undefined &&
+    (!Number.isFinite(Number(criteria.minimumSavingsPercent)) ||
+      Number(criteria.minimumSavingsPercent) < 0 ||
+      Number(criteria.minimumSavingsPercent) > 95)
+  ) {
+    return {
+      statusCode: 400,
+      body: { error: "minimumSavingsPercent must be a number between 0 and 95" }
+    };
+  }
+
+  if (
+    criteria.maxStops !== null &&
+    criteria.maxStops !== undefined &&
+    (!Number.isInteger(Number(criteria.maxStops)) || Number(criteria.maxStops) < 0)
+  ) {
+    return {
+      statusCode: 400,
+      body: { error: "maxStops must be a non-negative integer or null" }
+    };
   }
 
   const consent = upsertDealAlertConsent({
@@ -569,7 +676,7 @@ async function handleDealAlertConsent(request) {
 }
 
 async function handleBookingPriceUpdate(request, bookingId) {
-  const user = await resolveUser(request);
+  const user = request.authenticatedUser || await resolveUser(request);
   const body = await readJsonBody(request);
   const price = Number(body.price);
   const tokenUsername = user.username || user.email || user.id;
@@ -602,7 +709,7 @@ async function handleBookingPriceUpdate(request, bookingId) {
 }
 
 async function handleBookingCancel(request, bookingId) {
-  const user = await resolveUser(request);
+  const user = request.authenticatedUser || await resolveUser(request);
   const body = await readJsonBody(request);
   const tokenUsername = user.username || user.email || user.id;
   const username = process.env.API_REQUIRE_AUTH === "true" ? tokenUsername : body.username || tokenUsername;
@@ -640,7 +747,7 @@ async function handleDealAlertConsentTransfer(request) {
     };
   }
 
-  const user = await resolveUser(request);
+  const user = request.authenticatedUser || await resolveUser(request);
   const tokenUsername = user.username || user.email || user.id;
   const username = process.env.API_REQUIRE_AUTH === "true" ? tokenUsername : body.username || tokenUsername;
   const consent = transferDealAlertConsentBooking({
@@ -665,12 +772,35 @@ async function handleDealAlertConsentTransfer(request) {
 
 async function route(request, response) {
   const url = new URL(request.url, `http://${request.headers.host}`);
+  const requestId = randomUUID();
+  const startedAt = performance.now();
+  const requestLogger = logger.child({
+    requestId,
+    method: request.method,
+    path: url.pathname
+  });
+
+  request.log = requestLogger;
+  response.setHeader("X-Request-Id", requestId);
+  response.on("finish", () => {
+    requestLogger.info({
+      statusCode: response.statusCode,
+      durationMs: Number((performance.now() - startedAt).toFixed(1))
+    }, "HTTP request completed");
+  });
+  requestLogger.info({ query: Object.fromEntries(url.searchParams.entries()) }, "HTTP request started");
 
   if (request.method === "OPTIONS") {
     return sendJson(response, 204, {});
   }
 
   try {
+    const requiredPermissions = getRoutePermissions(request.method, url.pathname);
+
+    if (requiredPermissions.length > 0) {
+      request.authenticatedUser = await authorizeRequest(request, requiredPermissions);
+    }
+
     if (request.method === "GET" && url.pathname === "/health") {
       return sendJson(response, 200, { status: "ok" });
     }
@@ -742,7 +872,7 @@ async function route(request, response) {
     }
 
     if (request.method === "GET" && url.pathname === "/api/me") {
-      const user = await resolveUser(request);
+      const user = request.authenticatedUser || await resolveUser(request);
 
       return sendJson(response, 200, { data: user });
     }
@@ -760,7 +890,7 @@ async function route(request, response) {
     }
 
     if (request.method === "GET" && url.pathname === "/api/bookings/flights") {
-      const user = await resolveUser(request);
+      const user = request.authenticatedUser || await resolveUser(request);
       const username = user.username || user.email || user.id;
 
       return sendJson(response, 200, {
@@ -822,7 +952,7 @@ async function route(request, response) {
     if (request.method === "POST" && url.pathname === "/api/cds/profiles") {
       const body = await readJsonBody(request);
       const token = await getCDSToken();
-      const cdsEndpoint = `${process.env.ASGARDEO_BASE_URL.replace(/\/$/, "")}/cds/api/v1/profiles`;
+      const cdsEndpoint = `${getAsgardeoBaseUrl()}/cds/api/v1/profiles`;
 
       const cdsResponse = await fetch(cdsEndpoint, {
         method: "POST",
@@ -869,7 +999,7 @@ async function route(request, response) {
       const profileId = url.pathname.split("/").pop();
       const token = await getCDSToken();
       const cdsEndpoint = new URL(
-        `${process.env.ASGARDEO_BASE_URL.replace(/\/$/, "")}/cds/api/v1/profiles/${profileId}`
+        `${getAsgardeoBaseUrl()}/cds/api/v1/profiles/${profileId}`
       );
 
       const applicationIdentifier = url.searchParams.get("application_identifier");
@@ -906,7 +1036,7 @@ async function route(request, response) {
       const profileId = url.pathname.split("/").pop();
       const body = await readJsonBody(request);
       const token = await getCDSToken();
-      const cdsEndpoint = `${process.env.ASGARDEO_BASE_URL.replace(/\/$/, "")}/cds/api/v1/profiles/${profileId}`;
+      const cdsEndpoint = `${getAsgardeoBaseUrl()}/cds/api/v1/profiles/${profileId}`;
 
       const cdsResponse = await fetch(cdsEndpoint, {
         method: "PATCH",
@@ -930,7 +1060,13 @@ async function route(request, response) {
 
     return sendJson(response, 404, { error: "Route not found" });
   } catch (error) {
-    const statusCode = error.message.toLowerCase().includes("token") ? 401 : 500;
+    const statusCode = error instanceof AuthError
+      ? error.statusCode
+      : error.message?.toLowerCase().includes("token")
+        ? 401
+        : 500;
+
+    requestLogger.error({ err: error, statusCode }, "HTTP request failed");
 
     return sendJson(response, statusCode, {
       error: error.message
@@ -939,5 +1075,5 @@ async function route(request, response) {
 }
 
 createServer(route).listen(port, () => {
-  console.log(`Wayfinder Travel API listening on http://localhost:${port}`);
+  logger.info({ port, frontendOrigin }, `Wayfinder Travel API listening on http://localhost:${port}`);
 });

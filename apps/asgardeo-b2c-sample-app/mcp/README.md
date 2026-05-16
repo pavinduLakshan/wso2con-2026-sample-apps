@@ -38,8 +38,10 @@ npm install
 Start the MCP server:
 
 ```bash
-npm start
+npm run dev
 ```
+
+The dev command watches `server.ts` and restarts the MCP server after code changes. Use `npm start` when you want a non-watching process.
 
 The MCP endpoint is available at:
 

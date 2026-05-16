@@ -3,6 +3,16 @@ import { createPublicKey, createVerify } from "node:crypto";
 const textDecoder = new TextDecoder();
 let jwksCache = null;
 
+export class AuthError extends Error {
+  statusCode;
+
+  constructor(message, statusCode = 401) {
+    super(message);
+    this.name = "AuthError";
+    this.statusCode = statusCode;
+  }
+}
+
 function base64UrlToBuffer(value) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
@@ -74,25 +84,58 @@ function validateClaims(payload) {
   const issuer = getIssuer();
   const audience = process.env.ASGARDEO_AUDIENCE;
 
-  if (payload.iss !== issuer) {
-    throw new Error("Invalid token issuer");
+  if (!issuer || payload.iss !== issuer) {
+    throw new AuthError("Invalid token issuer");
   }
 
   if (payload.exp && payload.exp < now) {
-    throw new Error("Token has expired");
+    throw new AuthError("Token has expired");
   }
 
   if (payload.nbf && payload.nbf > now) {
-    throw new Error("Token is not active yet");
+    throw new AuthError("Token is not active yet");
   }
 
-  if (audience) {
-    const tokenAudience = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+  if (!audience) {
+    throw new AuthError("ASGARDEO_AUDIENCE is required when API_REQUIRE_AUTH=true");
+  }
 
-    if (!tokenAudience.includes(audience)) {
-      throw new Error("Invalid token audience");
+  const expectedAudiences = audience.split(/[,\s]+/).map((value) => value.trim()).filter(Boolean);
+  const tokenAudience = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+
+  if (!expectedAudiences.some((expectedAudience) => tokenAudience.includes(expectedAudience))) {
+    throw new AuthError("Invalid token audience");
+  }
+}
+
+function extractTokenPermissions(payload) {
+  const permissions = new Set();
+  const claimValues = [
+    payload.scope,
+    payload.scp,
+    payload.permissions,
+    payload.roles
+  ];
+
+  for (const claimValue of claimValues) {
+    if (typeof claimValue === "string") {
+      for (const permission of claimValue.split(/\s+/)) {
+        if (permission) {
+          permissions.add(permission);
+        }
+      }
+    }
+
+    if (Array.isArray(claimValue)) {
+      for (const permission of claimValue) {
+        if (typeof permission === "string" && permission.trim()) {
+          permissions.add(permission.trim());
+        }
+      }
     }
   }
+
+  return [...permissions];
 }
 
 function mapClaimsToUser(payload) {
@@ -106,6 +149,7 @@ function mapClaimsToUser(payload) {
     email: payload.email,
     givenName: payload.given_name,
     familyName: payload.family_name,
+    permissions: extractTokenPermissions(payload),
     rawClaims: payload
   };
 }
@@ -154,24 +198,30 @@ export async function getAuthenticatedUser(request) {
   const token = getBearerToken(request);
 
   if (!token) {
-    throw new Error("Missing bearer token");
+    throw new AuthError("Missing bearer token");
   }
 
-  const parsedToken = parseJwt(token);
+  let parsedToken;
+
+  try {
+    parsedToken = parseJwt(token);
+  } catch {
+    throw new AuthError("Invalid bearer token");
+  }
 
   if (parsedToken.header.alg !== "RS256") {
-    throw new Error("Unsupported token algorithm");
+    throw new AuthError("Unsupported token algorithm");
   }
 
   const jwks = await getJwks();
   const jwk = jwks.keys?.find((key) => key.kid === parsedToken.header.kid);
 
   if (!jwk) {
-    throw new Error("Signing key not found");
+    throw new AuthError("Signing key not found");
   }
 
   if (!verifySignature(parsedToken, jwk)) {
-    throw new Error("Invalid token signature");
+    throw new AuthError("Invalid token signature");
   }
 
   validateClaims(parsedToken.payload);
@@ -205,4 +255,28 @@ export async function resolveUser(request) {
   }
 
   return getAuthenticatedUser(request);
+}
+
+export function assertUserHasPermissions(user, requiredPermissions = []) {
+  if (process.env.API_REQUIRE_AUTH !== "true" || requiredPermissions.length === 0) {
+    return;
+  }
+
+  const grantedPermissions = new Set(user.permissions || []);
+  const hasPermission = requiredPermissions.some((permission) => grantedPermissions.has(permission));
+
+  if (!hasPermission) {
+    throw new AuthError(
+      `Missing required permission. Expected one of: ${requiredPermissions.join(", ")}`,
+      403
+    );
+  }
+}
+
+export async function authorizeRequest(request, requiredPermissions = []) {
+  const user = await resolveUser(request);
+
+  assertUserHasPermissions(user, requiredPermissions);
+
+  return user;
 }

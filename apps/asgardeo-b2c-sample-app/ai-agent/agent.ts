@@ -15,7 +15,8 @@ limitations under the License.
 */
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { performance } from "node:perf_hooks";
 import type { Duplex } from "node:stream";
 
 import { AsgardeoJavaScriptClient } from "@asgardeo/javascript";
@@ -25,11 +26,28 @@ import { MultiServerMCPClient } from "@langchain/mcp-adapters";
 import dotenv from "dotenv";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import pino from "pino";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 dotenv.config({
     path: resolve(__dirname, ".env"),
+});
+
+const logger = pino({
+    level: process.env.LOG_LEVEL || "info",
+    redact: {
+        paths: [
+            "authorization",
+            "headers.authorization",
+            "*.accessToken",
+            "*.access_token",
+            "*.agentSecret",
+            "*.clientSecret",
+            "*.client_secret",
+        ],
+        censor: "[redacted]",
+    },
 });
 
 const asgardeoConfig = {
@@ -356,7 +374,11 @@ async function runHardcodedConsentCommand(message: string, tools: ToolWithSchema
     }
 
     if (values.datePreference) {
-        criteria.datePreference = values.datePreference;
+        criteria.timePreference = values.datePreference;
+    }
+
+    if (values.timePreference) {
+        criteria.timePreference = values.timePreference;
     }
 
     if (sameCabinOnly !== undefined) {
@@ -475,6 +497,14 @@ function isSocketWritable(socket: Duplex) {
     return !socket.destroyed && !socket.writableEnded;
 }
 
+function isExpectedSocketClose(error: unknown) {
+    if (!isJsonSchemaObject(error)) {
+        return false;
+    }
+
+    return ["ECONNRESET", "EPIPE", "ECONNABORTED"].includes(String(error.code || ""));
+}
+
 function writeFrame(socket: Duplex, frame: Buffer) {
     if (!isSocketWritable(socket)) {
         return false;
@@ -485,7 +515,7 @@ function writeFrame(socket: Duplex, frame: Buffer) {
 
         return true;
     } catch (error) {
-        console.warn("Unable to write WebSocket frame:", error instanceof Error ? error.message : error);
+        logger.warn({ err: error }, "Unable to write WebSocket frame");
 
         return false;
     }
@@ -564,7 +594,7 @@ function writeHttpJson(response: ServerResponse, statusCode: number, body: Recor
 
 async function processDealAlertWebhook(tools: ToolWithSchema[], payload: unknown) {
     if (!isJsonSchemaObject(payload) || !Array.isArray(payload.matches) || payload.matches.length === 0) {
-        console.log("Deal alert webhook did not include matching consents.");
+        logger.info("Deal alert webhook did not include matching consents.");
 
         return;
     }
@@ -580,15 +610,12 @@ async function processDealAlertWebhook(tools: ToolWithSchema[], payload: unknown
         throw new Error(`process_new_flight_deal_alerts tool is not available. Loaded tools: ${availableTools || "none"}.`);
     }
 
-    console.log(`Processing ${payload.matches.length} matching better-deal alert consent(s).`);
+    logger.info({ matchCount: payload.matches.length }, "Processing matching better-deal alert consents");
     await dealTool.invoke({ matches: payload.matches as unknown[] });
 }
 
 async function createAgent() {
-    console.log("##########################################################################################################");
-    console.log("##      This is an Agent Authentication Flow sample application for authenticating AI agents            ##");
-    console.log("##                         using Asgardeo and LangChain framework                                       ##");
-    console.log("##########################################################################################################");
+    logger.info("Starting Wayfinder AI agent with Asgardeo and LangChain");
 
     const asgardeoJavaScriptClient = new AsgardeoJavaScriptClient(asgardeoConfig);
     includeClientSecretInAgentAuthorizeRequest(asgardeoJavaScriptClient);
@@ -605,7 +632,9 @@ async function createAgent() {
     });
 
     const tools = sanitizeToolSchemasForGemini(await client.getTools());
-    console.log(`Loaded MCP tools: ${tools.map((tool) => tool.name).filter(Boolean).join(", ")}`);
+    logger.info({
+        tools: tools.map((tool) => tool.name).filter(Boolean),
+    }, "Loaded MCP tools");
 
     const agent = createReactAgent({
         llm: model,
@@ -622,6 +651,23 @@ async function runAgentServer() {
     const host = process.env.HOST || "localhost";
 
     const server = createServer(async (request, response) => {
+        const requestId = randomUUID();
+        const startedAt = performance.now();
+        const requestLogger = logger.child({
+            requestId,
+            method: request.method,
+            path: request.url,
+        });
+
+        response.setHeader("X-Request-Id", requestId);
+        response.on("finish", () => {
+            requestLogger.info({
+                statusCode: response.statusCode,
+                durationMs: Number((performance.now() - startedAt).toFixed(1)),
+            }, "HTTP request completed");
+        });
+        requestLogger.info("HTTP request started");
+
         if (request.url === "/health") {
             writeHttpJson(response, 200, {
                 status: "ok",
@@ -640,9 +686,10 @@ async function runAgentServer() {
 
                 writeHttpJson(response, 202, { status: "accepted" });
                 void processDealAlertWebhook(tools, payload).catch((error: unknown) => {
-                    console.error("Error processing deal alert webhook:", error);
+                    requestLogger.error({ err: error }, "Error processing deal alert webhook");
                 });
             } catch (error) {
+                requestLogger.warn({ err: error }, "Invalid deal alert webhook payload");
                 writeHttpJson(response, 400, {
                     error: error instanceof Error ? error.message : "Invalid deal alert payload.",
                 });
@@ -655,10 +702,15 @@ async function runAgentServer() {
     });
 
     const handleConnection = (socket: Duplex) => {
+        const connectionId = randomUUID();
+        const connectionLogger = logger.child({ connectionId });
         let isClosed = false;
+
+        connectionLogger.info("WebSocket client connected");
 
         socket.on("close", () => {
             isClosed = true;
+            connectionLogger.info("WebSocket client closed connection");
         });
 
         socket.on("end", () => {
@@ -667,7 +719,14 @@ async function runAgentServer() {
 
         socket.on("error", (error) => {
             isClosed = true;
-            console.warn("WebSocket client disconnected:", error.message);
+
+            if (isExpectedSocketClose(error)) {
+                connectionLogger.debug({ err: error }, "WebSocket client disconnected");
+
+                return;
+            }
+
+            connectionLogger.warn({ err: error }, "WebSocket client socket error");
         });
 
         sendJson(socket, {
@@ -707,12 +766,17 @@ async function runAgentServer() {
 
                             const messages = parseChatRequest(payload);
                             const latestMessage = messages[messages.length - 1]?.content || "";
+                            const messageLogger = connectionLogger.child({
+                                messageCount: messages.length,
+                                latestMessageLength: latestMessage.length,
+                            });
 
                             if (!sendJson(socket, { type: "processing" })) {
                                 isClosed = true;
                                 return;
                             }
 
+                            messageLogger.info("Processing chat message");
                             const hardcodedResponse =
                                 await runHardcodedConsentCommand(latestMessage, tools);
                             const responseMessage = hardcodedResponse ?? getResponseContent(
@@ -727,12 +791,13 @@ async function runAgentServer() {
                                 type: "response",
                                 message: responseMessage,
                             });
+                            messageLogger.info({ responseLength: responseMessage.length }, "Chat message processed");
                         }).catch((error: unknown) => {
                             if (isClosed) {
                                 return;
                             }
 
-                            console.error("Error handling chat message:", error);
+                            connectionLogger.error({ err: error }, "Error handling chat message");
                             sendJson(socket, {
                                 type: "error",
                                 message: error instanceof Error ? error.message : "Failed to process chat message.",
@@ -743,7 +808,7 @@ async function runAgentServer() {
                     parsed = parseWebSocketFrame(buffer);
                 }
             } catch (error) {
-                console.error("Error parsing WebSocket frame:", error);
+                connectionLogger.error({ err: error }, "Error parsing WebSocket frame");
                 sendJson(socket, {
                     type: "error",
                     message: error instanceof Error ? error.message : "Invalid WebSocket message.",
@@ -755,7 +820,13 @@ async function runAgentServer() {
 
     server.on("upgrade", (request, socket, head) => {
         socket.on("error", (error) => {
-            console.warn("WebSocket upgrade socket error:", error.message);
+            if (isExpectedSocketClose(error)) {
+                logger.debug({ err: error }, "WebSocket upgrade socket closed by client");
+
+                return;
+            }
+
+            logger.warn({ err: error }, "WebSocket upgrade socket error");
         });
 
         try {
@@ -786,18 +857,20 @@ async function runAgentServer() {
 
             handleConnection(socket);
         } catch (error) {
-            console.error("Error upgrading WebSocket connection:", error);
+            logger.error({ err: error }, "Error upgrading WebSocket connection");
             socket.destroy();
         }
     });
 
     server.listen(port, host, () => {
-        console.log(`AI agent WebSocket server is running at ws://${host}:${port}/chat`);
-        console.log(`Health check is available at http://${host}:${port}/health`);
+        logger.info({
+            chatUrl: `ws://${host}:${port}/chat`,
+            healthUrl: `http://${host}:${port}/health`,
+        }, "AI agent WebSocket server started");
     });
 
     const shutdown = async () => {
-        console.log("Shutting down AI agent...");
+        logger.info("Shutting down AI agent");
         server.close();
         await client.close();
         process.exit(0);
@@ -807,4 +880,7 @@ async function runAgentServer() {
     process.on("SIGTERM", shutdown);
 }
 
-runAgentServer().catch(console.error);
+runAgentServer().catch((error: unknown) => {
+    logger.fatal({ err: error }, "AI agent failed to start");
+    process.exit(1);
+});

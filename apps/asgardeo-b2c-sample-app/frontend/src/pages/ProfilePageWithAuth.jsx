@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAsgardeo } from "@asgardeo/react";
 import { CircleUserRound, Pencil, Save, ShieldCheck, X } from "lucide-react";
 import { getProfile, updateProfile } from "../api";
@@ -33,7 +33,19 @@ function getUserEmail(user) {
     const primaryEmail = emails.find((item) => item?.primary);
     const firstEmail = primaryEmail || emails[0];
 
-    return firstEmail?.value || "";
+    if (typeof firstEmail === "string") {
+      return firstEmail;
+    }
+
+    return firstEmail?.value || firstEmail?.display || "";
+  }
+
+  if (typeof emails === "string") {
+    return emails;
+  }
+
+  if (emails && typeof emails === "object") {
+    return emails.value || emails.display || "";
   }
 
   return "";
@@ -88,6 +100,7 @@ export function ProfilePageWithAuth() {
     "created_at",
     "createdAt",
     "created",
+    "meta.created",
     "metadata.created",
     "rawClaims.created_at",
     "rawClaims.created"
@@ -103,7 +116,6 @@ export function ProfilePageWithAuth() {
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const loadedProfileKeyRef = useRef("");
   const firstName = profile.firstName;
   const lastName = profile.lastName;
   const email = profile.email;
@@ -129,28 +141,33 @@ export function ProfilePageWithAuth() {
     if (profileRequestCache.has(profileLoadKey)) {
       const cachedProfile = profileRequestCache.get(profileLoadKey);
 
-      if (cachedProfile?.email) {
+      if (cachedProfile?.email && cachedProfile?.memberSince) {
         setProfile(cachedProfile);
         setDraftProfile(cachedProfile);
-        loadedProfileKeyRef.current = profileLoadKey;
         return;
       }
 
       profileRequestCache.delete(profileLoadKey);
     }
 
-    if (loadedProfileKeyRef.current === profileLoadKey) {
-      return;
-    }
-
-    loadedProfileKeyRef.current = profileLoadKey;
-
     async function loadAsgardeoProfile() {
       try {
         const profileRequest = profileRequestInFlight.get(profileLoadKey) || (async () => {
-          const accessToken = await getAccessToken();
+          let lastProfile = null;
 
-          return getProfile(accessToken, user);
+          for (let attempt = 0; attempt < 3; attempt += 1) {
+            const accessToken = await getAccessToken();
+            const currentProfile = await getProfile(accessToken, user);
+            lastProfile = currentProfile;
+
+            if (getProfileEmail(currentProfile) && currentProfile.memberSince) {
+              return currentProfile;
+            }
+
+            await new Promise((resolve) => window.setTimeout(resolve, 500));
+          }
+
+          return lastProfile;
         })();
 
         profileRequestInFlight.set(profileLoadKey, profileRequest);
@@ -168,7 +185,10 @@ export function ProfilePageWithAuth() {
           memberSince: savedProfile.memberSince || claimProfile.memberSince
         };
 
-        profileRequestCache.set(profileLoadKey, nextProfile);
+        if (nextProfile.email && nextProfile.memberSince) {
+          profileRequestCache.set(profileLoadKey, nextProfile);
+        }
+
         setProfile(nextProfile);
         setDraftProfile(nextProfile);
       } catch (error) {
@@ -183,7 +203,7 @@ export function ProfilePageWithAuth() {
     return () => {
       isActive = false;
     };
-  }, [claimFirstName, claimLastName, claimEmail, createdDate, isSignedIn, profileLoadKey]);
+  }, [claimFirstName, claimLastName, claimEmail, createdDate, getAccessToken, isSignedIn, profileLoadKey]);
 
   function updateDraftProfile(field, value) {
     setDraftProfile((current) => ({
@@ -232,7 +252,6 @@ export function ProfilePageWithAuth() {
       setProfile(displayProfile);
       setDraftProfile(displayProfile);
       profileRequestCache.set(profileLoadKey, displayProfile);
-      loadedProfileKeyRef.current = profileLoadKey;
       setIsEditing(false);
       setStatusMessage("Profile updated in Asgardeo.");
     } catch (error) {

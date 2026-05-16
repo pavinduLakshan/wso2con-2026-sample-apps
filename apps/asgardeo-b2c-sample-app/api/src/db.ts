@@ -213,6 +213,23 @@ function parseFlightStartDate(value) {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
+function parseTimeMinutes(value) {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
+
+  if (!match) {
+    return null;
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours > 23 || minutes > 59) {
+    return null;
+  }
+
+  return (hours * 60) + minutes;
+}
+
 function mapFlight(row) {
   return {
     id: row.id,
@@ -919,7 +936,7 @@ function criteriaMatchesFlight(criteria, currentBooking, newFlight) {
   const maxStops = maxStopsValue === null || maxStopsValue === undefined || maxStopsValue === ""
     ? null
     : Number(maxStopsValue);
-  const datePreference = String(criteria.datePreference || "any");
+  const timePreference = String(criteria.timePreference || criteria.datePreference || "any");
   const sameCabinOnly = Boolean(criteria.sameCabinOnly);
   const currentPrice = Number(currentBooking.booking_price ?? currentBooking.flight_price);
   const newPrice = Number(newFlight.price);
@@ -944,19 +961,27 @@ function criteriaMatchesFlight(criteria, currentBooking, newFlight) {
     return false;
   }
 
-  if (datePreference === "earlier" || datePreference === "later") {
+  if (timePreference === "earlier" || timePreference === "later") {
     const currentDate = parseFlightStartDate(currentBooking.dates);
     const newDate = parseFlightStartDate(newFlight.dates);
+    const currentDepartureMinutes = parseTimeMinutes(currentBooking.departure_time || currentBooking.departureTime);
+    const newDepartureMinutes = parseTimeMinutes(newFlight.departureTime || newFlight.departure_time);
 
-    if (currentDate === null || newDate === null) {
+    if (
+      currentDate === null ||
+      newDate === null ||
+      currentDate !== newDate ||
+      currentDepartureMinutes === null ||
+      newDepartureMinutes === null
+    ) {
       return false;
     }
 
-    if (datePreference === "earlier" && newDate >= currentDate) {
+    if (timePreference === "earlier" && newDepartureMinutes >= currentDepartureMinutes) {
       return false;
     }
 
-    if (datePreference === "later" && newDate <= currentDate) {
+    if (timePreference === "later" && newDepartureMinutes <= currentDepartureMinutes) {
       return false;
     }
   }
@@ -982,7 +1007,8 @@ export function listMatchingDealAlertConsentsForFlight(flightId) {
           flights.price AS flight_price,
           flights.currency,
           flights.cabin,
-          flights.dates
+          flights.dates,
+          flights.departure_time
         FROM deal_alert_consents
         INNER JOIN bookings ON deal_alert_consents.booking_id = bookings.id
         INNER JOIN flights ON bookings.item_id = flights.id
@@ -1004,6 +1030,7 @@ export function listMatchingDealAlertConsentsForFlight(flightId) {
       currentPrice: row.booking_price ?? row.flight_price,
       currentCabin: row.cabin,
       currentDates: row.dates,
+      currentDepartureTime: row.departure_time,
       currency: row.currency,
       travelers: row.travelers,
       userId: row.user_id,
@@ -1013,7 +1040,8 @@ export function listMatchingDealAlertConsentsForFlight(flightId) {
       booking_price: match.currentPrice,
       flight_price: match.currentPrice,
       cabin: match.currentCabin,
-      dates: match.currentDates
+      dates: match.currentDates,
+      departure_time: match.currentDepartureTime
     }, newFlight));
 }
 

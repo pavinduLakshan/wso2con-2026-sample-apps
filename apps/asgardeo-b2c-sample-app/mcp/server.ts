@@ -178,7 +178,7 @@ function getRequiredEnv(name: string) {
     const value = process.env[name]?.trim();
 
     if (!value) {
-        throw new Error(`${name} is required for the CIBA better-deal tool. Add ASGARDEO_BASE_URL, CIBA_CLIENT_ID, and CIBA_CLIENT_SECRET to apps/common/mcp/.env, then restart the MCP server.`);
+        throw new Error(`${name} is required for the CIBA better-deal tool. Add ASGARDEO_BASE_URL, CIBA_CLIENT_ID, and CIBA_CLIENT_SECRET to the MCP .env file, then let the dev server reload.`);
     }
 
     return value;
@@ -612,12 +612,14 @@ function createTravelMcpServer(authorization?: string) {
             criteria: z.object({
                 minimumSavingsPercent: z.number().min(0).max(95).optional(),
                 maxStops: z.number().int().min(0).nullable().optional(),
-                datePreference: z.enum(["any", "earlier", "later"]).optional(),
+                timePreference: z.enum(["any", "earlier", "later"]).optional().describe("Preferred departure time on the same travel date."),
+                datePreference: z.enum(["any", "earlier", "later"]).optional().describe("Deprecated. Use timePreference."),
                 sameCabinOnly: z.boolean().optional(),
             }).optional().describe("User-selected criteria for matching future better deals."),
             minimumSavingsPercent: z.number().min(0).max(95).optional(),
             maxStops: z.number().int().min(0).nullable().optional(),
-            datePreference: z.enum(["any", "earlier", "later"]).optional(),
+            timePreference: z.enum(["any", "earlier", "later"]).optional().describe("any, earlier, or later departure time on the same travel date."),
+            datePreference: z.enum(["any", "earlier", "later"]).optional().describe("Deprecated. Use timePreference."),
             sameCabinOnly: z.boolean().optional(),
             enabled: z.boolean().describe("true when the user agrees to alerts, false when they decline."),
         },
@@ -629,6 +631,7 @@ function createTravelMcpServer(authorization?: string) {
             criteria,
             minimumSavingsPercent,
             maxStops,
+            timePreference,
             datePreference,
             sameCabinOnly,
             enabled,
@@ -643,7 +646,8 @@ function createTravelMcpServer(authorization?: string) {
                     ...(criteria ?? {}),
                     ...(minimumSavingsPercent !== undefined ? { minimumSavingsPercent } : {}),
                     ...(maxStops !== undefined ? { maxStops } : {}),
-                    ...(datePreference !== undefined ? { datePreference } : {}),
+                    ...(timePreference !== undefined ? { timePreference } : {}),
+                    ...(timePreference === undefined && datePreference !== undefined ? { timePreference: datePreference } : {}),
                     ...(sameCabinOnly !== undefined ? { sameCabinOnly } : {}),
                 },
                 enabled,

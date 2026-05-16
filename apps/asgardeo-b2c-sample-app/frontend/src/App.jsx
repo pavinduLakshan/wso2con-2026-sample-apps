@@ -37,7 +37,7 @@ const SIGN_UP_URL = ASGARDEO_ORG_NAME
 const DEFAULT_DEAL_ALERT_CRITERIA = {
   minimumSavingsPercent: 10,
   maxStops: null,
-  datePreference: "any",
+  timePreference: "any",
   sameCabinOnly: true
 };
 
@@ -463,7 +463,7 @@ function ChatWidget() {
         `criteria: ${JSON.stringify(criteria)}`,
         `minimumSavingsPercent: ${criteria.minimumSavingsPercent ?? ""}`,
         `maxStops: ${criteria.maxStops ?? ""}`,
-        `datePreference: ${criteria.datePreference ?? ""}`,
+        `timePreference: ${criteria.timePreference ?? ""}`,
         `sameCabinOnly: ${criteria.sameCabinOnly ?? ""}`,
         `enabled: ${enabled}`,
       ].join("\n"),
@@ -550,16 +550,16 @@ function ChatWidget() {
                   </select>
                 </label>
                 <label className="chat-criteria-field">
-                  <span>Travel date</span>
+                  <span>Travel time</span>
                   <select
-                    value={dealAlertCriteria.datePreference}
+                    value={dealAlertCriteria.timePreference}
                     onChange={(event) => updateDealAlertCriteria({
-                      datePreference: event.target.value
+                      timePreference: event.target.value
                     })}
                   >
-                    <option value="any">Any date</option>
-                    <option value="earlier">Earlier than booked</option>
-                    <option value="later">Later than booked</option>
+                    <option value="any">Any time</option>
+                    <option value="earlier">Earlier same day</option>
+                    <option value="later">Later same day</option>
                   </select>
                 </label>
                 <label className="chat-criteria-toggle">

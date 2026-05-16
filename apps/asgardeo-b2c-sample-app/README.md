@@ -103,7 +103,7 @@ MCP server:
 ```bash
 cd mcp
 npm install
-npm start
+npm run dev
 ```
 
 AI agent:
@@ -111,8 +111,10 @@ AI agent:
 ```bash
 cd ai-agent
 npm install
-npm start
+npm run dev
 ```
+
+The API, MCP server, AI agent, and frontend dev commands all watch source files and reload on code changes.
 
 Default local URLs:
 

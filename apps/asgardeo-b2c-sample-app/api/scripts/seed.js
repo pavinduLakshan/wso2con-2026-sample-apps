@@ -1,12 +1,14 @@
 import Database from "better-sqlite3";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const apiRoot = resolve(__dirname, "..");
-const dbPath = resolve(apiRoot, "wayfinder.sqlite");
+const configuredDbPath = process.env.SQLITE_DB_PATH || "wayfinder.sqlite";
+const dbPath = resolve(apiRoot, configuredDbPath);
 const schemaPath = resolve(apiRoot, "schema.sql");
+const forceSeed = process.argv.includes("--force") || process.argv.includes("-f");
 
 const flights = [
   {
@@ -321,6 +323,14 @@ if (!existsSync(apiRoot)) {
   mkdirSync(apiRoot, { recursive: true });
 }
 
+if (forceSeed) {
+  for (const path of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
+    if (existsSync(path)) {
+      rmSync(path, { force: true });
+    }
+  }
+}
+
 const db = new Database(dbPath);
 
 db.pragma("journal_mode = WAL");
@@ -419,4 +429,4 @@ const seed = db.transaction(() => {
 seed();
 db.close();
 
-console.log(`Seeded SQLite database at ${dbPath}`);
+console.log(`Seeded SQLite database at ${dbPath}${forceSeed ? " after force reset" : ""}`);

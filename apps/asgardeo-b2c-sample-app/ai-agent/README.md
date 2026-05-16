@@ -51,6 +51,8 @@ cd ai-agent
 npm run dev
 ```
 
+The dev command watches `agent.ts` and restarts the agent after code changes. Use `npm start` when you want a non-watching process.
+
 The chat endpoint is available at:
 
 ```text

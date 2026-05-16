@@ -19,6 +19,12 @@ npm run seed
 npm run dev
 ```
 
+`npm run dev` watches source files and restarts the API automatically. To rebuild the local SQLite database from scratch, run:
+
+```bash
+npm run seed -- --force
+```
+
 The API runs on:
 
 ```text
@@ -94,6 +100,7 @@ To require Asgardeo access tokens for protected endpoints:
 API_REQUIRE_AUTH=true
 ASGARDEO_BASE_URL=https://api.asgardeo.io/t/your-organization-name
 ASGARDEO_AUDIENCE=your-asgardeo-application-client-id
+API_PERMISSION_PREFIX=wayfinder:
 ```
 
 When enabled, protected routes require:
@@ -105,6 +112,13 @@ Authorization: Bearer <asgardeo-access-token>
 Protected endpoints:
 
 ```text
+GET  /api/flights
+POST /api/flights
+GET  /api/flights/:flightId
+DELETE /api/flights/:flightId
+GET  /api/hotels
+GET  /api/trips
+GET  /api/locations
 POST /api/bookings
 GET  /api/bookings/flights
 GET  /api/me
@@ -112,4 +126,28 @@ GET  /api/me/profile
 PATCH /api/me/profile
 PATCH /api/bookings/:bookingId/price
 PATCH /api/bookings/:bookingId/cancel
+POST /api/deal-alert-consents
+GET  /api/deal-alert-consents/:username
+POST /api/deal-alert-consents/transfer
+GET  /api/cds/profiles/:profileId
+POST /api/cds/profiles
+PATCH /api/cds/profiles/:profileId
+```
+
+When `API_REQUIRE_AUTH=true`, tokens must match `ASGARDEO_ISSUER` (or the default `${ASGARDEO_BASE_URL}/oauth2/token`), include one of the configured audiences, and include route-specific permissions in `scope`, `scp`, or `permissions`. The default permission names are:
+
+```text
+wayfinder:flights:read
+wayfinder:flights:write
+wayfinder:hotels:read
+wayfinder:trips:read
+wayfinder:locations:read
+wayfinder:bookings:read
+wayfinder:bookings:write
+wayfinder:profile:read
+wayfinder:profile:write
+wayfinder:deal-alerts:read
+wayfinder:deal-alerts:write
+wayfinder:cds-profiles:read
+wayfinder:cds-profiles:write
 ```
