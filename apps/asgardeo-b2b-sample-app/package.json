@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "dev:agent": "npm --prefix ai-agent run dev",
+    "dev:mcp": "npm --prefix mcp run dev",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

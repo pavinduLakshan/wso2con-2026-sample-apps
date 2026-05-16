@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useAuth } from "./lib/auth/client";
 import AdminSidebar from "./AdminSidebar";
+import AgentChatWidget from "./AgentChatWidget";
 import ImpersonationBanner from "./ImpersonationBanner";
 import LoadingScreen from "./LoadingScreen";
 import WorkspaceLoader from "./WorkspaceLoader";
@@ -107,6 +108,7 @@ export default function WorkspaceShell({
             {children}
           </div>
         </section>
+        <AgentChatWidget />
       </main>
     );
   }
@@ -129,6 +131,7 @@ export default function WorkspaceShell({
           {children}
         </div>
       </section>
+      <AgentChatWidget />
     </main>
   );
 }
