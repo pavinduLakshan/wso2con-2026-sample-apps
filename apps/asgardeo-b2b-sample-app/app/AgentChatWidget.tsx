@@ -145,7 +145,7 @@ export default function AgentChatWidget() {
           <header className="agent-chat-header">
             <div>
               <span className="agent-chat-kicker">AI assistant</span>
-              <h2>Wayfinder Enterprise</h2>
+              <h2>Wayfinder</h2>
             </div>
             <div className="agent-chat-actions">
               <span className={`agent-chat-status agent-chat-status--${connectionStatus}`}>

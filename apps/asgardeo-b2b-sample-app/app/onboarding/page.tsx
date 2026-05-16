@@ -6,7 +6,7 @@ export default function OnboardingPage() {
     <main className="onboarding-page">
       <nav className="detail-nav">
         <Link className="brand" href="/">
-          Wayfinder Enterprise
+          Wayfinder
         </Link>
         <Link className="button button-secondary" href="/">
           Back home
@@ -18,7 +18,7 @@ export default function OnboardingPage() {
           <p className="eyebrow">Self-service setup</p>
           <h1>Create your travel workspace.</h1>
           <p>
-            Add your profile and company details. Wayfinder Enterprise will prepare your workspace,
+            Add your profile and company details. Wayfinder will prepare your workspace,
             create your user account, and move you into the new environment.
           </p>
           <div className="onboarding-steps" aria-label="Onboarding steps">

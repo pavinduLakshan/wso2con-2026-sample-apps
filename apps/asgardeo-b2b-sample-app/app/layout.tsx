@@ -1,11 +1,22 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import { headers } from "next/headers";
 import { AuthProvider } from "./lib/auth/client";
 import "./globals.css";
 
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"]
+});
+
 export const metadata: Metadata = {
-  title: "Wayfinder Enterprise",
-  description: "Enterprise travel management for teams"
+  title: "Wayfinder",
+  description: "Wayfinder helps agencies, finance teams, and client administrators manage corporate travel programs, policies, and spend across multiple workspaces.",
+  themeColor: "#2563eb",
+  icons: {
+    icon: "/wayfinder-logo.png",
+    apple: "/wayfinder-logo.png"
+  }
 };
 
 export const dynamic = "force-dynamic";
@@ -22,7 +33,7 @@ export default async function RootLayout({
   const hasOrgId = urlParams.has("orgId");
 
   return (
-    <html lang="en">
+    <html lang="en" className={inter.className}>
       <body>
         <AuthProvider initialIsExchanging={hasCode || hasOrgId}>
           {children}
