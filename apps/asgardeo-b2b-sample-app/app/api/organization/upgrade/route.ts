@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireScope } from "../../../lib/auth/guard";
 import { Scope, Tier } from "../../../lib/auth/utils";
 import { getOrgTier, upsertOrgTier } from "../../../lib/db/queries/org-tiers";
-import { shareApplicationRoles } from "../../../lib/asgardeo/client";
+import { shareApplicationRoles, removeApplicationRoles, scimFetchRoleIdByName, scimAssignRoleToUser } from "../../../lib/asgardeo/client";
 
 const baseUrl = (process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL ?? "").replace(/\/$/, "");
 const clientId = process.env.ASGARDEO_CLIENT_ID ?? process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID ?? "";
@@ -22,6 +22,19 @@ function getRolesForTier(tier: Tier): string[] {
   if (tier === Tier.BASIC) return [basicBrandingEditorRole];
   if (tier === Tier.ADVANCED) return [basicBrandingEditorRole, advancedBrandingEditorRole, idpManagerRole];
   return [];
+}
+
+async function assignRolesToAdmin(accessToken: string, adminId: string, roles: string[]): Promise<void> {
+  await Promise.all(
+    roles.map(async (roleName) => {
+      const roleId = await scimFetchRoleIdByName(accessToken, roleName);
+      if (roleId) {
+        await scimAssignRoleToUser(accessToken, roleId, adminId);
+      } else {
+        console.warn(`[upgrade] Role "${roleName}" not found in org — skipping assignment.`);
+      }
+    })
+  );
 }
 
 async function getRootToken(): Promise<string> {
@@ -57,7 +70,7 @@ export async function POST(request: NextRequest) {
   const auth = await requireScope(request, [Scope.UPGRADE_CREATE]);
   if (auth instanceof NextResponse) return auth;
 
-  const { orgId } = auth.claims;
+  const { orgId, sub: adminId } = auth.claims;
 
   let tier: Tier;
   try {
@@ -70,10 +83,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
+  const roles = getRolesForTier(tier);
+
   if (applicationId) {
     try {
       const rootToken = await getRootToken();
-      const roles = getRolesForTier(tier);
       if (roles.length > 0) {
         await shareApplicationRoles(rootToken, orgId, roles, applicationId, appDisplayName);
       }
@@ -88,6 +102,15 @@ export async function POST(request: NextRequest) {
     console.warn("[upgrade] ASGARDEO_APP_ID not configured — skipping application role sharing.");
   }
 
+  if (adminId && roles.length > 0) {
+    const accessToken = request.headers.get("authorization")!.slice(7);
+    try {
+      await assignRolesToAdmin(accessToken, adminId, roles);
+    } catch (err) {
+      console.error("[upgrade] Admin role assignment failed:", err);
+    }
+  }
+
   upsertOrgTier(orgId, tier);
 
   return NextResponse.json({ tier }, { status: 202 });
@@ -97,7 +120,7 @@ export async function PUT(request: NextRequest) {
   const auth = await requireScope(request, [Scope.UPGRADE_UPDATE]);
   if (auth instanceof NextResponse) return auth;
 
-  const { orgId } = auth.claims;
+  const { orgId, sub: adminId } = auth.claims;
 
   let tier: Tier;
   try {
@@ -110,10 +133,11 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
+  const roles = getRolesForTier(tier);
+
   if (applicationId) {
     try {
       const rootToken = await getRootToken();
-      const roles = getRolesForTier(tier);
       if (roles.length > 0) {
         await shareApplicationRoles(rootToken, orgId, roles, applicationId, appDisplayName);
       }
@@ -123,6 +147,15 @@ export async function PUT(request: NextRequest) {
         { error: "Upgrade failed. Please check your configuration and try again." },
         { status: 500 }
       );
+    }
+  }
+
+  if (adminId && roles.length > 0) {
+    const accessToken = request.headers.get("authorization")!.slice(7);
+    try {
+      await assignRolesToAdmin(accessToken, adminId, roles);
+    } catch (err) {
+      console.error("[upgrade] Admin role assignment failed:", err);
     }
   }
 
@@ -136,6 +169,23 @@ export async function DELETE(request: NextRequest) {
   if (auth instanceof NextResponse) return auth;
 
   const { orgId } = auth.claims;
+
+  if (applicationId) {
+    try {
+      const rootToken = await getRootToken();
+      const allRoles = [basicBrandingEditorRole, advancedBrandingEditorRole, idpManagerRole];
+      await removeApplicationRoles(rootToken, orgId, allRoles, applicationId, appDisplayName);
+    } catch (err) {
+      console.error("[upgrade] Application role removal failed:", err);
+      return NextResponse.json(
+        { error: "Downgrade failed. Please check your configuration and try again." },
+        { status: 500 }
+      );
+    }
+  } else {
+    console.warn("[upgrade] ASGARDEO_APP_ID not configured — skipping application role removal.");
+  }
+
   upsertOrgTier(orgId, Tier.FREE);
 
   return NextResponse.json({ tier: Tier.FREE });
