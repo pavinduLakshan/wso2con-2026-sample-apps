@@ -12,6 +12,7 @@ asgardeo-b2c-sample-app/
 ├── api/             Node.js REST API
 ├── mcp/             TypeScript MCP server that wraps the REST API
 ├── ai-agent/        LangChain WebSocket agent with Asgardeo agent authentication
+├── e2e/             Playwright end-to-end test suite
 └── README.md        Project overview
 ```
 
@@ -120,6 +121,35 @@ Frontend: http://localhost:5173
 API:      http://localhost:8787
 MCP:      http://localhost:8000/mcp
 Agent:    ws://localhost:8790/chat
+```
+
+## End-to-End Tests
+
+The root `e2e/` suite uses Playwright to test the B2C sample app flows. The Playwright config starts the frontend dev server automatically and enables E2E-only mocks for Asgardeo auth and backend API calls, so you do not need to start the API separately for this suite.
+
+Install dependencies from the B2C app root:
+
+```bash
+npm install
+npm --prefix frontend install
+```
+
+Install the Playwright Chromium browser once:
+
+```bash
+npx playwright install chromium
+```
+
+Run the E2E suite:
+
+```bash
+npm run test:e2e
+```
+
+Run the suite in Playwright UI mode:
+
+```bash
+npm run test:e2e:ui
 ```
 
 ## Asgardeo Setup
