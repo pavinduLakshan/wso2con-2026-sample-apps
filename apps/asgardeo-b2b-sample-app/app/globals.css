@@ -6,13 +6,20 @@
   --panel: #ffffff;
   --panel-soft: #eaf3ff;
   --primary: #2563eb;
+  --primary-rgb: 37, 99, 235;
   --primary-strong: #1e3a8a;
+  --primary-ring: rgba(37, 99, 235, 0.14);
   --accent: #ffd166;
-  --accent-soft: #ffe8b7;
+  --accent-soft: rgba(255, 209, 102, 0.18);
+  --accent-shadow: rgba(255, 177, 66, 0.25);
   --success: #047857;
   --warning: #b45309;
   --navy: #061a33;
   --shadow: 0 28px 80px rgba(17, 24, 39, 0.14);
+  /* App-shell defaults — at :root so BrandingProvider inline style overrides them */
+  --app-primary: #1d4ed8;
+  --app-primary-soft: #e8efff;
+  --app-primary-soft-border: #c9d8ff;
 }
 
 * {
@@ -135,8 +142,8 @@ strong {
 }
 
 .button-primary {
-  background: #ffd166;
-  box-shadow: 0 12px 26px rgba(255, 177, 66, 0.25);
+  background: var(--accent);
+  box-shadow: 0 12px 26px var(--accent-shadow);
   color: #151e24;
 }
 
@@ -305,10 +312,10 @@ strong {
   --public-muted: #5f6b7a;
   --public-line: rgba(17, 24, 39, 0.1);
   --public-panel: #ffffff;
-  --public-primary: #2563eb;
-  --public-primary-strong: #1e3a8a;
-  --public-accent: #ffd166;
-  --public-lime: #ffd166;
+  --public-primary: var(--primary);
+  --public-primary-strong: var(--primary-strong);
+  --public-accent: var(--accent);
+  --public-lime: var(--accent);
   --public-pink: #ef4444;
 
   background: var(--public-bg);
@@ -321,8 +328,8 @@ strong {
 }
 
 .public-shell .button-primary {
-  background: #ffd166;
-  box-shadow: 0 12px 26px rgba(255, 177, 66, 0.25);
+  background: var(--public-accent);
+  box-shadow: 0 12px 26px var(--accent-shadow);
   color: #151e24;
 }
 
@@ -374,8 +381,8 @@ strong {
 
 .header-user-avatar {
   align-items: center;
-  background: #e8efff;
-  border: 1px solid #c9d8ff;
+  background: var(--app-primary-soft);
+  border: 1px solid var(--app-primary-soft-border);
   border-radius: 8px;
   color: var(--public-primary);
   display: inline-flex;
@@ -389,9 +396,9 @@ strong {
 
 .asgardeo-user-dropdown .asgardeo-avatar,
 .asgardeo-user-dropdown__content .asgardeo-avatar {
-  background: #e8efff !important;
-  border: 1px solid #c9d8ff;
-  color: #1d4ed8 !important;
+  background: var(--app-primary-soft) !important;
+  border: 1px solid var(--app-primary-soft-border);
+  color: var(--app-primary) !important;
   font-weight: 800;
 }
 
@@ -438,8 +445,8 @@ strong {
 }
 
 .public-shell .hero {
-  background: #eaf3ff;
-  border: 1px solid rgba(37, 99, 235, 0.14);
+  background: var(--panel-soft);
+  border: 1px solid var(--primary-ring);
   border-radius: 8px;
   min-height: calc(100vh - 96px);
   margin-top: 20px;
@@ -509,7 +516,7 @@ strong {
 .route-map {
   align-items: center;
   background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(255, 209, 102, 0.2)),
+    linear-gradient(135deg, var(--app-primary-soft), var(--accent-soft)),
     #ffffff;
   border: 1px solid var(--public-line);
   border-radius: 8px;
@@ -568,10 +575,10 @@ strong {
 }
 
 .flight-list-preview em {
-  background: rgba(255, 209, 102, 0.16);
-  border: 1px solid rgba(255, 209, 102, 0.44);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft);
   border-radius: 999px;
-  color: #ffd166;
+  color: var(--accent);
   font-style: normal;
   font-weight: 700;
   padding: 6px 10px;
@@ -703,7 +710,7 @@ strong {
 
 .operations-card {
   background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.94), rgba(6, 26, 51, 0.96)),
+    linear-gradient(135deg, rgba(var(--primary-rgb), 0.94), rgba(6, 26, 51, 0.96)),
     var(--navy);
   color: #ffffff;
   display: flex;
@@ -785,14 +792,23 @@ strong {
   --app-card: #ffffff;
   --app-ink: #0f172a;
   --app-muted: #64748b;
-  --app-primary: #1d4ed8;
-  --app-primary-soft: #e8efff;
   --app-sidebar: #0f172a;
   --app-sidebar-muted: #94a3b8;
   --app-success-bg: #eefbf4;
   --app-success: #047857;
   --app-warning-bg: #fff8eb;
   --app-warning: #a15c07;
+  --app-error-bg: #fff5f5;
+  /* Aliases used by component inline styles */
+  --color-primary: var(--app-primary);
+  --color-primary-surface: var(--app-primary-soft);
+  --color-border: var(--app-border);
+  --color-surface: var(--app-card);
+  --color-surface-subtle: var(--app-bg);
+  --color-text: var(--app-ink);
+  --color-text-subtle: var(--app-muted);
+  --color-success: var(--app-success);
+  --color-success-bg: var(--app-success-bg);
 
   background: var(--app-bg);
   color: var(--app-ink);
@@ -1074,7 +1090,7 @@ strong {
 
 .app-shell .header-user-avatar {
   background: var(--app-primary-soft);
-  border-color: #c9d8ff;
+  border-color: var(--app-primary-soft-border);
   color: var(--app-primary);
 }
 
@@ -3698,7 +3714,7 @@ select.form-field-input {
 }
 
 .agent-chat-kicker {
-  color: #ffd166;
+  color: var(--accent);
   display: block;
   font-size: 0.72rem;
   font-weight: 700;
@@ -3788,7 +3804,7 @@ select.form-field-input {
 
 .agent-chat-message--user {
   align-self: flex-end;
-  background: #2563eb;
+  background: var(--primary);
   color: #ffffff;
 }
 
@@ -3836,11 +3852,11 @@ select.form-field-input {
 
 .agent-chat-input-label input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+  box-shadow: 0 0 0 3px var(--primary-ring);
 }
 
 .agent-chat-send-button {
-  background: #ffd166;
+  background: var(--accent);
   border-radius: 8px;
   color: #151e24;
   min-height: 42px;
@@ -3848,7 +3864,7 @@ select.form-field-input {
 }
 
 .agent-chat-launcher {
-  background: #ffd166;
+  background: var(--accent);
   border-radius: 999px;
   color: #151e24;
   height: 58px;

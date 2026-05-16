@@ -21,6 +21,21 @@ interface BrandingState {
 
 const BrandingContext = createContext<BrandingState>({ branding: null });
 
+function hexToRgb(hex: string): [number, number, number] {
+  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+}
+
+function hexToSoft(hex: string): string {
+  const [r, g, b] = hexToRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, 0.12)`;
+}
+
+function hexToDark(hex: string): string {
+  const [r, g, b] = hexToRgb(hex);
+  const toHex = (n: number) => Math.round(n * 0.62).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
 export function BrandingProvider({ children }: { children: ReactNode }) {
   const { accessToken, isSignedIn } = useAuth();
   const [branding, setBranding] = useState<BrandingConfig | null>(null);
@@ -42,9 +57,24 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     if (!branding) return;
 
     const root = document.documentElement;
+    const [pr, pg, pb] = hexToRgb(branding.primaryColor);
+    const [ar, ag, ab] = hexToRgb(branding.secondaryColor);
+
+    // Global vars (used by public shell, loading screens, misc elements)
+    root.style.setProperty("--primary-rgb", `${pr}, ${pg}, ${pb}`);
     root.style.setProperty("--primary", branding.primaryColor);
+    root.style.setProperty("--primary-strong", hexToDark(branding.primaryColor));
+    root.style.setProperty("--primary-ring", `rgba(${pr}, ${pg}, ${pb}, 0.14)`);
+    root.style.setProperty("--panel-soft", `rgba(${pr}, ${pg}, ${pb}, 0.1)`);
     root.style.setProperty("--accent", branding.secondaryColor);
+    root.style.setProperty("--accent-soft", `rgba(${ar}, ${ag}, ${ab}, 0.18)`);
+    root.style.setProperty("--accent-shadow", `rgba(${ar}, ${ag}, ${ab}, 0.3)`);
     root.style.setProperty("--foreground", branding.textPrimaryColor);
+
+    // App-shell vars (used by .app-shell / .member-shell — all authenticated UI)
+    root.style.setProperty("--app-primary", branding.primaryColor);
+    root.style.setProperty("--app-primary-soft", hexToSoft(branding.primaryColor));
+    root.style.setProperty("--app-primary-soft-border", `rgba(${pr}, ${pg}, ${pb}, 0.3)`);
 
     if (branding.fontImportUrl) {
       const styleId = "branding-font-import";

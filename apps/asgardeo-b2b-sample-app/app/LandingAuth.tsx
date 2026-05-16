@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useAuth } from "./lib/auth/client";
+import { useBranding } from "./lib/branding/BrandingProvider";
 
 function useLandingUser() {
   const { isSignedIn, user, signIn, signOut } = useAuth();
@@ -29,12 +30,15 @@ function useLandingUser() {
 
 export function LandingHeader() {
   const { displayName, email, initials, isSignedIn, signIn, signOut } = useLandingUser();
+  const { branding } = useBranding();
+  const logoSrc = branding?.logoUrl || "/wayfinder-logo.png";
+  const appName = branding?.displayName || "Wayfinder";
 
   return (
     <nav className="topbar public-topbar">
       <Link className="brand" href="/">
-        <img src="/wayfinder-logo.png" className="brand-logo" alt="Wayfinder" />
-        Wayfinder
+        <img src={logoSrc} className="brand-logo" alt={appName} />
+        {appName}
       </Link>
       <div className="public-nav-links" aria-label="Landing page sections">
         <a href="#platform">Platform</a>
@@ -72,6 +76,19 @@ export function LandingHeader() {
         )}
       </div>
     </nav>
+  );
+}
+
+export function FooterBrand() {
+  const { branding } = useBranding();
+  const logoSrc = branding?.logoUrl || "/wayfinder-logo.png";
+  const appName = branding?.displayName || "Wayfinder";
+
+  return (
+    <Link className="brand" href="/">
+      <img src={logoSrc} className="brand-logo" alt={appName} />
+      {appName}
+    </Link>
   );
 }
 
