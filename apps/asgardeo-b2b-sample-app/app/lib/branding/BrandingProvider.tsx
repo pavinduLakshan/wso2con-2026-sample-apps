@@ -113,6 +113,10 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
       const link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
       if (link) link.href = branding.faviconUrl;
     }
+
+    if (branding.displayName) {
+      document.title = branding.displayName;
+    }
   }, [branding]);
 
   return (
