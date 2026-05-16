@@ -76,7 +76,7 @@ export default function Home() {
             <h2>Everything agencies need after the booking request arrives.</h2>
           </div>
           <p>
-            Wayfinder Enterprise brings the operational pieces together so account managers, finance
+            Wayfinder brings the operational pieces together so account managers, finance
             teams, and client admins can work from the same travel record.
           </p>
         </div>
@@ -152,7 +152,7 @@ export default function Home() {
 
       <section className="public-section cta-section">
         <div>
-          <p className="eyebrow">Wayfinder Enterprise</p>
+          <p className="eyebrow">Wayfinder</p>
           <h2>Make corporate travel feel coordinated before the itinerary is even booked.</h2>
         </div>
         <HeroCtaSection />
@@ -160,7 +160,8 @@ export default function Home() {
 
       <footer className="public-footer">
         <Link className="brand" href="/">
-          Wayfinder Enterprise
+          <img src="/wayfinder-logo.png" className="brand-logo" alt="Wayfinder" />
+          Wayfinder
         </Link>
         <p>Enterprise travel operations for agencies, finance teams, and client administrators.</p>
         <div>

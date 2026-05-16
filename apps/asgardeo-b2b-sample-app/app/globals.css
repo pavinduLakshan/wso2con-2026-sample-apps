@@ -7,7 +7,7 @@
   --panel-soft: #eaf3ff;
   --primary: #2563eb;
   --primary-strong: #1e3a8a;
-  --accent: #f59e0b;
+  --accent: #ffd166;
   --accent-soft: #ffe8b7;
   --success: #047857;
   --warning: #b45309;
@@ -28,7 +28,7 @@ body {
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Aptos, "Avenir Next", "SF Pro Text", "Helvetica Neue", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: Inter, Aptos, "Avenir Next", "SF Pro Text", "Helvetica Neue", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-weight: 400;
 }
 
@@ -54,7 +54,7 @@ p {
 }
 
 h1 {
-  font-size: clamp(2.35rem, 6vw, 5.4rem);
+  font-size: clamp(2.1rem, 4vw, 3.7rem);
   letter-spacing: 0;
   line-height: 0.96;
   margin-bottom: 24px;
@@ -103,12 +103,11 @@ strong {
   gap: 10px;
 }
 
-.brand::before {
-  background: var(--primary);
+.brand-logo {
   border-radius: 8px;
-  content: "";
   display: inline-block;
   height: 34px;
+  object-fit: contain;
   width: 34px;
 }
 
@@ -308,7 +307,7 @@ strong {
   --public-panel: #ffffff;
   --public-primary: #2563eb;
   --public-primary-strong: #1e3a8a;
-  --public-accent: #f59e0b;
+  --public-accent: #ffd166;
   --public-lime: #ffd166;
   --public-pink: #ef4444;
 
@@ -419,6 +418,19 @@ strong {
   font-size: 0.76rem;
   font-weight: 650;
   line-height: 1.15;
+}
+
+.header-user-org {
+  color: var(--public-primary) !important;
+  font-size: 0.68rem !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.app-shell .header-user-org,
+.member-shell .header-user-org {
+  color: var(--app-primary) !important;
 }
 
 .public-shell .eyebrow {
@@ -833,16 +845,11 @@ strong {
 }
 
 .sidebar-brand-mark {
-  align-items: center;
-  background: var(--app-primary);
   border-radius: 8px;
-  color: #ffffff;
-  display: inline-flex;
+  display: inline-block;
   flex: 0 0 36px;
-  font-size: 0.95rem;
-  font-weight: 800;
   height: 36px;
-  justify-content: center;
+  object-fit: contain;
   width: 36px;
 }
 
@@ -898,11 +905,15 @@ strong {
 }
 
 .sidebar.collapsed .sidebar-brand-label,
-.sidebar.collapsed .role-badge,
+.sidebar.collapsed .sidebar-user-copy,
 .sidebar.collapsed .side-nav-label {
   opacity: 0;
   pointer-events: none;
   position: absolute;
+}
+
+.sidebar.collapsed .sidebar-user {
+  justify-content: center;
 }
 
 .sidebar.collapsed .side-nav a {
@@ -910,16 +921,54 @@ strong {
   padding: 0;
 }
 
-.role-badge {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  color: #dbeafe;
-  display: inline-flex;
-  font-size: 0.72rem;
-  font-weight: 750;
+.sidebar-user {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  display: flex;
+  gap: 10px;
   margin-top: 18px;
-  padding: 6px 10px;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.sidebar-user-avatar {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: #93c5fd;
+  display: inline-flex;
+  flex: 0 0 32px;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.sidebar-user-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.sidebar-user-copy strong,
+.sidebar-user-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-user-copy strong {
+  color: #f1f5f9;
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
+.sidebar-user-copy span {
+  color: var(--app-sidebar-muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.2;
 }
 
 .side-nav {
@@ -984,8 +1033,8 @@ strong {
 
 .workspace-header h1,
 .detail-page h1 {
-  font-size: clamp(1.85rem, 3vw, 2.65rem);
-  line-height: 1.05;
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  line-height: 1.2;
   margin-bottom: 0;
 }
 
@@ -1017,6 +1066,28 @@ strong {
   color: var(--app-ink);
 }
 
+.app-shell .header-user,
+.member-shell .header-user {
+  background: transparent;
+  border-color: var(--app-border);
+}
+
+.app-shell .header-user-avatar {
+  background: var(--app-primary-soft);
+  border-color: #c9d8ff;
+  color: var(--app-primary);
+}
+
+.app-shell .header-user-copy strong,
+.member-shell .header-user-copy strong {
+  color: var(--app-ink);
+}
+
+.app-shell .header-user-copy span,
+.member-shell .header-user-copy span {
+  color: var(--app-muted);
+}
+
 .app-shell .text-button,
 .member-shell .text-button {
   color: var(--app-primary);
@@ -1044,8 +1115,8 @@ strong {
 .command-panel h2,
 .booking-hero h2,
 .workspace-panel h2 {
-  font-size: clamp(1.3rem, 2vw, 1.85rem);
-  line-height: 1.15;
+  font-size: clamp(1.1rem, 1.6vw, 1.45rem);
+  line-height: 1.2;
 }
 
 .command-panel p,

@@ -33,7 +33,8 @@ export function LandingHeader() {
   return (
     <nav className="topbar public-topbar">
       <Link className="brand" href="/">
-        Wayfinder Enterprise
+        <img src="/wayfinder-logo.png" className="brand-logo" alt="Wayfinder" />
+        Wayfinder
       </Link>
       <div className="public-nav-links" aria-label="Landing page sections">
         <a href="#platform">Platform</a>
@@ -62,9 +63,9 @@ export function LandingHeader() {
         ) : (
           <>
             <Link className="button button-secondary" href="/onboarding">
-              Onboard
+              Get started
             </Link>
-            <button className="button button-primary" onClick={() => signIn()} type="button">
+            <button className="button button-primary" onClick={() => signIn({ fidp: "OrganizationSSO" })} type="button">
               Sign in
             </button>
           </>
