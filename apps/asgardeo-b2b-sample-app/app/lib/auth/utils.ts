@@ -74,7 +74,12 @@ export function buildUserFromTokens(
   accessPayload: Record<string, unknown>,
   idPayload: Record<string, unknown>
 ): AppUser {
-  const roles = Array.isArray(accessPayload.roles) ? (accessPayload.roles as unknown[]).map(String) : [];
+  const rawRoles = accessPayload.roles;
+  const roles = Array.isArray(rawRoles)
+    ? (rawRoles as unknown[]).map(String)
+    : typeof rawRoles === "string" && rawRoles.length > 0
+    ? [rawRoles]
+    : [];
 
   return {
     email: typeof idPayload.email === "string" ? idPayload.email : "",

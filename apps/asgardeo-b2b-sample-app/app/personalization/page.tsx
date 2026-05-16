@@ -12,13 +12,18 @@ export default function PersonalizationPage() {
   const roles = user ? getRolesFromPermissions(user.permissions) : [UserRole.MEMBER];
   const [brandColor, setBrandColor] = useState("#2563eb");
 
-  if (!roles.includes(UserRole.ADMIN)) {
+  const canAccess =
+    roles.includes(UserRole.ADMIN) ||
+    roles.includes(UserRole.BASIC_BRANDING_EDITOR) ||
+    roles.includes(UserRole.ADVANCED_BRANDING_EDITOR);
+
+  if (!canAccess) {
     return (
       <WorkspaceShell activeHref="/personalization" eyebrow="Member workspace" roles={roles} title="Personalization">
         <section className="workspace-panel">
           <p className="eyebrow">Access restricted</p>
           <h2>You don&apos;t have permission to view this page.</h2>
-          <p>Personalization settings are available to administrators only.</p>
+          <p>Personalization settings are available to administrators and branding editors only.</p>
         </section>
       </WorkspaceShell>
     );

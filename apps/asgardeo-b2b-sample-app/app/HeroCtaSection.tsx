@@ -9,7 +9,7 @@ export default function HeroCtaSection() {
   return (
     <div className="hero-actions">
       {isSignedIn ? (
-        <Link className="button button-primary" href="/requests">
+        <Link className="button button-primary" href="/dashboard">
           Go to dashboard
         </Link>
       ) : (

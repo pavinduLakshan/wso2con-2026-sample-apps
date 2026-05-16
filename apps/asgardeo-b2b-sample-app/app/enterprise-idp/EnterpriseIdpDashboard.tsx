@@ -11,6 +11,7 @@ interface IdpConfig {
   clientSecret: string;
   authorizationEndpoint: string;
   tokenEndpoint: string;
+  logoutEndpoint: string;
   jwksUri: string;
 }
 
@@ -24,6 +25,7 @@ const EMPTY_FORM: IdpConfig = {
   clientSecret: "",
   authorizationEndpoint: "",
   tokenEndpoint: "",
+  logoutEndpoint: "",
   jwksUri: "",
 };
 
@@ -339,7 +341,7 @@ export default function EnterpriseIdpDashboard({ roles }: { roles: UserRole[] })
   function handleEdit() {
     setForm(
       idp
-        ? { name: idp.name, clientId: idp.clientId, clientSecret: idp.clientSecret, authorizationEndpoint: idp.authorizationEndpoint, tokenEndpoint: idp.tokenEndpoint, jwksUri: idp.jwksUri }
+        ? { name: idp.name, clientId: idp.clientId, clientSecret: idp.clientSecret, authorizationEndpoint: idp.authorizationEndpoint, tokenEndpoint: idp.tokenEndpoint, logoutEndpoint: idp.logoutEndpoint, jwksUri: idp.jwksUri }
         : EMPTY_FORM
     );
     setError(null);
@@ -675,7 +677,7 @@ export default function EnterpriseIdpDashboard({ roles }: { roles: UserRole[] })
               <div style={{ marginTop: "18px", display: "grid", gap: "20px" }}>
                 <div className="idp-form-grid">
                   <label className="form-field-label" style={{ gridColumn: "1 / -1" }}>
-                    Name <span style={{ color: "#b91c1c" }}>*</span>
+                    <span>Name <span style={{ color: "#b91c1c" }}>*</span></span>
                     <input
                       className="form-field-input"
                       placeholder="My Enterprise IdP"
@@ -686,7 +688,7 @@ export default function EnterpriseIdpDashboard({ roles }: { roles: UserRole[] })
                     />
                   </label>
                   <label className="form-field-label">
-                    Client ID <span style={{ color: "#b91c1c" }}>*</span>
+                    <span>Client ID <span style={{ color: "#b91c1c" }}>*</span></span>
                     <input
                       className="form-field-input"
                       placeholder="your-client-id"
@@ -697,7 +699,7 @@ export default function EnterpriseIdpDashboard({ roles }: { roles: UserRole[] })
                     />
                   </label>
                   <label className="form-field-label">
-                    Client Secret <span style={{ color: "#b91c1c" }}>*</span>
+                    <span>Client Secret <span style={{ color: "#b91c1c" }}>*</span></span>
                     <input
                       className="form-field-input"
                       placeholder="••••••••••••••••"
@@ -708,7 +710,7 @@ export default function EnterpriseIdpDashboard({ roles }: { roles: UserRole[] })
                     />
                   </label>
                   <label className="form-field-label">
-                    Authorization Endpoint URL <span style={{ color: "#b91c1c" }}>*</span>
+                    <span>Authorization Endpoint URL <span style={{ color: "#b91c1c" }}>*</span></span>
                     <input
                       className="form-field-input"
                       placeholder="https://idp.example.com/oauth2/authorize"
@@ -719,7 +721,7 @@ export default function EnterpriseIdpDashboard({ roles }: { roles: UserRole[] })
                     />
                   </label>
                   <label className="form-field-label">
-                    Token Endpoint URL <span style={{ color: "#b91c1c" }}>*</span>
+                    <span>Token Endpoint URL <span style={{ color: "#b91c1c" }}>*</span></span>
                     <input
                       className="form-field-input"
                       placeholder="https://idp.example.com/oauth2/token"
@@ -729,11 +731,19 @@ export default function EnterpriseIdpDashboard({ roles }: { roles: UserRole[] })
                       onChange={setField("tokenEndpoint")}
                     />
                   </label>
+                  <label className="form-field-label">
+                    Logout Endpoint URL
+                    <input
+                      className="form-field-input"
+                      placeholder="https://idp.example.com/oidc/logout"
+                      readOnly={!isEditing || !canManage}
+                      type="url"
+                      value={field("logoutEndpoint")}
+                      onChange={setField("logoutEndpoint")}
+                    />
+                  </label>
                   <label className="form-field-label" style={{ gridColumn: "1 / -1" }}>
-                    JWKS Endpoint{" "}
-                    <span style={{ color: "var(--color-text-subtle, #6b7280)", fontSize: "12px", fontWeight: 400 }}>
-                      (optional)
-                    </span>
+                    JWKS Endpoint
                     <input
                       className="form-field-input"
                       placeholder="https://idp.example.com/oauth2/jwks"

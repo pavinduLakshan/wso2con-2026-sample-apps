@@ -32,6 +32,7 @@ type CreateBody = {
   clientSecret?: string;
   authorizationEndpoint?: string;
   tokenEndpoint?: string;
+  logoutEndpoint?: string;
   jwksUri?: string;
 };
 
@@ -44,7 +45,7 @@ async function parseBody(request: NextRequest): Promise<CreateBody | NextRespons
 }
 
 function validateConfig(body: CreateBody): IdpConfig | NextResponse {
-  const { name, clientId, clientSecret, authorizationEndpoint, tokenEndpoint, jwksUri } = body;
+  const { name, clientId, clientSecret, authorizationEndpoint, tokenEndpoint, logoutEndpoint, jwksUri } = body;
 
   if (!name?.trim()) return NextResponse.json({ error: "name is required." }, { status: 422 });
   if (!clientId?.trim()) return NextResponse.json({ error: "clientId is required." }, { status: 422 });
@@ -52,7 +53,7 @@ function validateConfig(body: CreateBody): IdpConfig | NextResponse {
   if (!authorizationEndpoint?.trim()) return NextResponse.json({ error: "authorizationEndpoint is required." }, { status: 422 });
   if (!tokenEndpoint?.trim()) return NextResponse.json({ error: "tokenEndpoint is required." }, { status: 422 });
 
-  return { name: name.trim(), clientId: clientId.trim(), clientSecret: clientSecret.trim(), authorizationEndpoint: authorizationEndpoint.trim(), tokenEndpoint: tokenEndpoint.trim(), jwksUri: jwksUri?.trim() || undefined };
+  return { name: name.trim(), clientId: clientId.trim(), clientSecret: clientSecret.trim(), authorizationEndpoint: authorizationEndpoint.trim(), tokenEndpoint: tokenEndpoint.trim(), logoutEndpoint: logoutEndpoint?.trim() || undefined, jwksUri: jwksUri?.trim() || undefined };
 }
 
 export async function POST(request: NextRequest) {

@@ -239,6 +239,7 @@ export interface IdpConfig {
   clientSecret: string;
   authorizationEndpoint: string;
   tokenEndpoint: string;
+  logoutEndpoint?: string;
   jwksUri?: string;
 }
 
@@ -249,6 +250,7 @@ export interface IdpDetail {
   clientSecret: string;
   authorizationEndpoint: string;
   tokenEndpoint: string;
+  logoutEndpoint: string;
   jwksUri: string;
 }
 
@@ -282,6 +284,7 @@ function buildIdpPayload(config: IdpConfig): Record<string, unknown> {
             { key: "ClientSecret", value: config.clientSecret },
             { key: "OAuth2AuthzEPUrl", value: config.authorizationEndpoint },
             { key: "OAuth2TokenEPUrl", value: config.tokenEndpoint },
+            { key: "OIDCLogoutEPUrl", value: config.logoutEndpoint ?? "" },
             { key: "callbackUrl", value: callbackUrl },
           ],
         },
@@ -312,6 +315,7 @@ function extractIdpDetail(json: Record<string, unknown>): IdpDetail {
     clientSecret: prop("ClientSecret"),
     authorizationEndpoint: prop("OAuth2AuthzEPUrl"),
     tokenEndpoint: prop("OAuth2TokenEPUrl"),
+    logoutEndpoint: prop("OIDCLogoutEPUrl"),
     jwksUri: typeof (json?.certificate as Record<string, unknown>)?.jwksUri === "string"
       ? ((json.certificate as Record<string, unknown>).jwksUri as string)
       : "",
@@ -319,7 +323,7 @@ function extractIdpDetail(json: Record<string, unknown>): IdpDetail {
 }
 
 export async function idpCreate(accessToken: string, config: IdpConfig): Promise<IdpDetail> {
-  const response = await fetch(`${getBaseUrl()}/o/api/v1/identity-providers`, {
+  const response = await fetch(`${getBaseUrl()}/o/api/server/v1/identity-providers`, {
     method: "POST",
     body: JSON.stringify(buildIdpPayload(config)),
     headers: {
@@ -329,7 +333,7 @@ export async function idpCreate(accessToken: string, config: IdpConfig): Promise
     },
   });
 
-  const json = await response.json().catch(() => ({}));
+  const json = await response.json().catch(() => ({})) as Record<string, unknown>;
 
   if (!response.ok) {
     const message =
@@ -340,11 +344,14 @@ export async function idpCreate(accessToken: string, config: IdpConfig): Promise
     throw new Error(message);
   }
 
-  return extractIdpDetail(json as Record<string, unknown>);
+  const idpId = typeof json.id === "string" ? json.id : "";
+  return idpGet(accessToken, idpId);
 }
 
 export async function idpGet(accessToken: string, idpId: string): Promise<IdpDetail> {
-  const response = await fetch(`${getBaseUrl()}/o/api/v1/identity-providers/${idpId}`, {
+  const baseUrl = getBaseUrl();
+
+  const response = await fetch(`${baseUrl}/o/api/server/v1/identity-providers/${idpId}`, {
     method: "GET",
     headers: {
       Accept: "application/json",
@@ -352,7 +359,7 @@ export async function idpGet(accessToken: string, idpId: string): Promise<IdpDet
     },
   });
 
-  const json = await response.json().catch(() => ({}));
+  const json = await response.json().catch(() => ({})) as Record<string, unknown>;
 
   if (!response.ok) {
     const message =
@@ -363,36 +370,88 @@ export async function idpGet(accessToken: string, idpId: string): Promise<IdpDet
     throw new Error(message);
   }
 
-  return extractIdpDetail(json as Record<string, unknown>);
+  // The main GET response doesn't inline authenticator properties — fetch them separately.
+  const authenticatorId = (
+    (json.federatedAuthenticators as Record<string, unknown>)?.defaultAuthenticatorId as string | undefined
+  ) ?? "T3BlbklEQ29ubmVjdEF1dGhlbnRpY2F0b3I";
+
+  const authRes = await fetch(
+    `${baseUrl}/o/api/server/v1/identity-providers/${idpId}/federated-authenticators/${authenticatorId}`,
+    {
+      method: "GET",
+      headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
+    }
+  );
+
+  if (authRes.ok) {
+    const authJson = await authRes.json().catch(() => ({})) as Record<string, unknown>;
+    (json.federatedAuthenticators as Record<string, unknown>).authenticators = [authJson];
+  }
+
+  return extractIdpDetail(json);
 }
 
 export async function idpUpdate(accessToken: string, idpId: string, config: IdpConfig): Promise<IdpDetail> {
-  const response = await fetch(`${getBaseUrl()}/o/api/v1/identity-providers/${idpId}`, {
-    method: "PUT",
-    body: JSON.stringify(buildIdpPayload(config)),
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
+  const baseUrl = getBaseUrl();
+  const authenticatorId = "T3BlbklEQ29ubmVjdEF1dGhlbnRpY2F0b3I";
+  const callbackUrl = `${baseUrl}/commonauth`;
+
+  // PATCH the IDP for name and certificate (jwksUri) — the only fields supported by the main endpoint.
+  const patchRes = await fetch(`${baseUrl}/o/api/server/v1/identity-providers/${idpId}`, {
+    method: "PATCH",
+    headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify([
+      { operation: "REPLACE", path: "/name", value: config.name },
+      { operation: "REPLACE", path: "/certificate/jwksUri", value: config.jwksUri ?? "" },
+    ]),
   });
 
-  const json = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
+  if (!patchRes.ok) {
+    const json = await patchRes.json().catch(() => ({})) as Record<string, unknown>;
     const message =
       typeof json?.description === "string" ? json.description :
       typeof json?.message === "string" ? json.message :
       "Failed to update identity provider.";
-    console.error("[asgardeo/client] idpUpdate failed:", response.status, JSON.stringify(json));
+    console.error("[asgardeo/client] idpUpdate PATCH failed:", patchRes.status, JSON.stringify(json));
     throw new Error(message);
   }
 
-  return extractIdpDetail(json as Record<string, unknown>);
+  // PUT the federated authenticator to update OIDC-specific properties.
+  const authRes = await fetch(
+    `${baseUrl}/o/api/server/v1/identity-providers/${idpId}/federated-authenticators/${authenticatorId}`,
+    {
+      method: "PUT",
+      headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        authenticatorId,
+        isEnabled: true,
+        properties: [
+          { key: "ClientId", value: config.clientId },
+          { key: "ClientSecret", value: config.clientSecret },
+          { key: "OAuth2AuthzEPUrl", value: config.authorizationEndpoint },
+          { key: "OAuth2TokenEPUrl", value: config.tokenEndpoint },
+          { key: "OIDCLogoutEPUrl", value: config.logoutEndpoint ?? "" },
+          { key: "callbackUrl", value: callbackUrl },
+        ],
+      }),
+    }
+  );
+
+  if (!authRes.ok) {
+    const json = await authRes.json().catch(() => ({})) as Record<string, unknown>;
+    const message =
+      typeof json?.description === "string" ? json.description :
+      typeof json?.message === "string" ? json.message :
+      "Failed to update identity provider authenticator.";
+    console.error("[asgardeo/client] idpUpdate PUT authenticator failed:", authRes.status, JSON.stringify(json));
+    throw new Error(message);
+  }
+
+  return idpGet(accessToken, idpId);
 }
 
 export async function idpDelete(accessToken: string, idpId: string): Promise<void> {
-  const response = await fetch(`${getBaseUrl()}/o/api/v1/identity-providers/${idpId}`, {
+  const response = await fetch(`${getBaseUrl()}/o/api/server/v1/identity-providers/${idpId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${accessToken}`,

@@ -11,10 +11,12 @@ type NavItem = {
 
 export default function AdminSidebar({
   activeHref,
-  navItems
+  navItems,
+  roleLabel
 }: Readonly<{
   activeHref: string;
   navItems: NavItem[];
+  roleLabel: string;
 }>) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -48,7 +50,7 @@ export default function AdminSidebar({
           <span aria-hidden="true" />
         </button>
       </div>
-      <span className="role-badge">ADMIN</span>
+      <span className="role-badge">{roleLabel}</span>
       <nav className="side-nav" aria-label="Workspace navigation">
         {navItems.map((item) => (
           <Link
