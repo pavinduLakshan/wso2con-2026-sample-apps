@@ -364,7 +364,7 @@ async function reserveBetterDealForMatch({
     const ciba = await invokeCiba({
         authorization,
         loginHint: consent.username,
-        bindingMessage: `Approve booking the new ${newFlight.from} to ${newFlight.to} flight at ${newFlight.currency || match.currency || "USD"} ${newPrice}. Your existing booking will be canceled.`,
+        bindingMessage: `Approve booking the new ${newFlight.from} to ${newFlight.to} flight on ${newFlight.airline || "a partner airline"} departing at ${newFlight.departureTime} on ${newFlight.dates} at ${newFlight.currency || match.currency || "USD"} ${newPrice}. Your existing booking will be canceled.`,
         signal,
     });
 

@@ -47,6 +47,15 @@ function QuickBookingButton({ onClick }) {
   );
 }
 
+function LoadingFavorites() {
+  return (
+    <div className="empty-state results-loading" role="status" aria-live="polite">
+      <Plane className="results-loading__icon" size={24} aria-hidden="true" />
+      <span>Loading favorite flights...</span>
+    </div>
+  );
+}
+
 function QuickBookingsSection({ cdsProfileId }) {
   const navigate = useNavigate();
   const { getAccessToken } = useAsgardeo();
@@ -133,7 +142,7 @@ function QuickBookingsSection({ cdsProfileId }) {
       )}
 
       {isLoading ? (
-        <p className="empty-state">Loading favorite flights...</p>
+        <LoadingFavorites />
       ) : favoriteFlights.length === 0 ? (
         <p className="empty-state">No favorite flights found yet. Mark favorites in search results.</p>
       ) : (

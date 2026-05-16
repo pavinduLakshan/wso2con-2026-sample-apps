@@ -287,12 +287,7 @@ export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations,
 
     if (cdsProfileId && criteria.category === "flights" && flight) {
       try {
-        const favoritedFlights = Array.from(newFavorites)
-          .map((id) => {
-            const result = results.find((r) => r.id === id);
-            return result ? `${result.id}` : null;
-          })
-          .filter(Boolean);
+        const favoritedFlights = Array.from(newFavorites).map((id) => `${id}`);
 
         await updateCDSProfile(cdsProfileId, {
           application_data: {
