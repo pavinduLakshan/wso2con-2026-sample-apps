@@ -18,6 +18,8 @@ export enum Scope {
   IDP_CREATE = "internal_org_idp_create",
   IDP_UPDATE = "internal_org_idp_update",
   IDP_DELETE = "internal_org_idp_delete",
+  APP_MGT_VIEW = "internal_org_application_mgt_view",
+  APP_MGT_UPDATE = "internal_org_application_mgt_update",
   UPGRADE_VIEW = "view_upgrade",
   UPGRADE_CREATE = "create_upgrade",
   UPGRADE_UPDATE = "update_upgrade",

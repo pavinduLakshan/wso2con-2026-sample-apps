@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireScope } from "../../../lib/auth/guard";
 import { Scope } from "../../../lib/auth/utils";
 import { getEnterpriseIdp, upsertEnterpriseIdp, deleteEnterpriseIdp } from "../../../lib/db/queries/enterprise-idp";
-import { idpCreate, idpGet, idpUpdate, idpDelete, type IdpConfig } from "../../../lib/asgardeo/client";
+import { idpCreate, idpGet, idpUpdate, idpDelete, appGetIdByName, appAddIdpToAuthSequence, appRemoveIdpFromAuthSequence, type IdpConfig } from "../../../lib/asgardeo/client";
 
 export async function GET(request: NextRequest) {
   const auth = await requireScope(request, [Scope.IDP_VIEW]);
@@ -57,7 +57,7 @@ function validateConfig(body: CreateBody): IdpConfig | NextResponse {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireScope(request, [Scope.IDP_CREATE]);
+  const auth = await requireScope(request, [Scope.IDP_CREATE, Scope.APP_MGT_VIEW, Scope.APP_MGT_UPDATE], "all");
   if (auth instanceof NextResponse) return auth;
 
   const body = await parseBody(request);
@@ -71,6 +71,15 @@ export async function POST(request: NextRequest) {
 
   try {
     const idp = await idpCreate(accessToken, config);
+
+    const appName = process.env.ASGARDEO_APP_DISPLAY_NAME;
+    if (appName) {
+      const appId = await appGetIdByName(accessToken, appName);
+      if (appId) {
+        await appAddIdpToAuthSequence(accessToken, appId, idp.name);
+      }
+    }
+
     upsertEnterpriseIdp(orgId, idp.id, idp.name);
     return NextResponse.json({ idp }, { status: 201 });
   } catch (err) {
@@ -109,7 +118,7 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const auth = await requireScope(request, [Scope.IDP_DELETE]);
+  const auth = await requireScope(request, [Scope.IDP_DELETE, Scope.APP_MGT_VIEW, Scope.APP_MGT_UPDATE], "all");
   if (auth instanceof NextResponse) return auth;
 
   const { orgId } = auth.claims;
@@ -122,6 +131,14 @@ export async function DELETE(request: NextRequest) {
   const accessToken = request.headers.get("authorization")!.slice(7);
 
   try {
+    const appName = process.env.ASGARDEO_APP_DISPLAY_NAME;
+    if (appName) {
+      const appId = await appGetIdByName(accessToken, appName);
+      if (appId) {
+        await appRemoveIdpFromAuthSequence(accessToken, appId);
+      }
+    }
+
     await idpDelete(accessToken, record.idp_id);
     deleteEnterpriseIdp(orgId);
     return new NextResponse(null, { status: 204 });
