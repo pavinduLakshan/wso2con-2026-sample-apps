@@ -26,7 +26,7 @@ import { MultiServerMCPClient } from "@langchain/mcp-adapters";
 import dotenv from "dotenv";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import pino from "pino";
+import { createLogger } from "./logger.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -34,21 +34,7 @@ dotenv.config({
     path: resolve(__dirname, ".env"),
 });
 
-const logger = pino({
-    level: process.env.LOG_LEVEL || "info",
-    redact: {
-        paths: [
-            "authorization",
-            "headers.authorization",
-            "*.accessToken",
-            "*.access_token",
-            "*.agentSecret",
-            "*.clientSecret",
-            "*.client_secret",
-        ],
-        censor: "[redacted]",
-    },
-});
+const logger = createLogger();
 
 const asgardeoConfig = {
     afterSignInUrl: process.env.REDIRECT_URI || "",
