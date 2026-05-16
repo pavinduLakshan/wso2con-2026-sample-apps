@@ -8,6 +8,10 @@ export enum Scope {
   TRAVEL_POLICY_CREATE = "create_travel_policy",
   TRAVEL_POLICY_UPDATE = "update_travel_policy",
   TRAVEL_POLICY_DELETE = "delete_travel_policy",
+  IDP_VIEW = "internal_org_idp_view",
+  IDP_CREATE = "internal_org_idp_create",
+  IDP_UPDATE = "internal_org_idp_update",
+  IDP_DELETE = "internal_org_idp_delete",
 }
 
 export enum UserRole {
