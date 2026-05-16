@@ -834,6 +834,11 @@ async function route(request, response) {
       });
 
       const cdsData = await cdsResponse.json().catch(() => ({}));
+      console.log("CDS Profile Creation Response:", {
+        status: cdsResponse.status,
+        statusText: cdsResponse.statusText,
+        body: cdsData
+      });
 
       if (!cdsResponse.ok) {
         return sendJson(response, cdsResponse.status, {
