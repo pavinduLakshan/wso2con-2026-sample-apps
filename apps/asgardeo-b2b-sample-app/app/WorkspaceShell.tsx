@@ -9,14 +9,46 @@ import LoadingScreen from "./LoadingScreen";
 import WorkspaceLoader from "./WorkspaceLoader";
 import { UserRole } from "./lib/auth/utils";
 
-const adminNavItems = [
+const ALL_NAV_ITEMS = [
   { href: "/requests", label: "Travel policies", shortLabel: "P" },
   { href: "/organization", label: "Users and roles", shortLabel: "U" },
   { href: "/enterprise-idp", label: "Enterprise IdP", shortLabel: "IdP" },
   { href: "/bookings", label: "Flight booking", shortLabel: "F" },
   { href: "/personalization", label: "Personalization", shortLabel: "Ps" },
-  { href: "/billing", label: "Billing", shortLabel: "Bi" }
+  { href: "/billing", label: "Billing", shortLabel: "Bi" },
 ];
+
+const IDP_MANAGER_NAV_ITEMS = [
+  { href: "/enterprise-idp", label: "Enterprise IdP", shortLabel: "IdP" },
+];
+
+const BRANDING_NAV_ITEMS = [
+  { href: "/personalization", label: "Personalization", shortLabel: "Ps" },
+];
+
+function getNavItems(roles: UserRole[]) {
+  if (roles.includes(UserRole.ADMIN)) return ALL_NAV_ITEMS;
+  if (roles.includes(UserRole.IDP_MANAGER)) return IDP_MANAGER_NAV_ITEMS;
+  if (roles.includes(UserRole.BASIC_BRANDING_EDITOR) || roles.includes(UserRole.ADVANCED_BRANDING_EDITOR)) return BRANDING_NAV_ITEMS;
+  return [];
+}
+
+function getRoleLabel(roles: UserRole[]): string {
+  if (roles.includes(UserRole.ADMIN)) return "ADMIN";
+  if (roles.includes(UserRole.IDP_MANAGER)) return "IDP MANAGER";
+  if (roles.includes(UserRole.ADVANCED_BRANDING_EDITOR)) return "BRANDING EDITOR";
+  if (roles.includes(UserRole.BASIC_BRANDING_EDITOR)) return "BRANDING EDITOR";
+  return "MEMBER";
+}
+
+function hasAdminShell(roles: UserRole[]) {
+  return (
+    roles.includes(UserRole.ADMIN) ||
+    roles.includes(UserRole.IDP_MANAGER) ||
+    roles.includes(UserRole.BASIC_BRANDING_EDITOR) ||
+    roles.includes(UserRole.ADVANCED_BRANDING_EDITOR)
+  );
+}
 
 function ProfileActions() {
   const { signOut } = useAuth();
@@ -51,7 +83,7 @@ export default function WorkspaceShell({
     return <LoadingScreen description="Please wait while we set up your workspace." steps={[]} title="Loading your workspace…" />;
   }
 
-  if (!roles.includes(UserRole.ADMIN)) {
+  if (!hasAdminShell(roles)) {
     return (
       <main className="member-shell">
         <ImpersonationBanner />
@@ -82,7 +114,7 @@ export default function WorkspaceShell({
   return (
     <main className="app-shell admin-shell">
       <ImpersonationBanner />
-      <AdminSidebar activeHref={activeHref} navItems={adminNavItems} />
+      <AdminSidebar activeHref={activeHref} navItems={getNavItems(roles)} roleLabel={getRoleLabel(roles)} />
 
       <section className="workspace">
         <header className="workspace-header">

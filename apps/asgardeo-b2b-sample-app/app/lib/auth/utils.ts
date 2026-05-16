@@ -1,3 +1,9 @@
+export enum Tier {
+  FREE = "FREE",
+  BASIC = "BASIC",
+  ADVANCED = "ADVANCED",
+}
+
 export enum Scope {
   USER_LIST = "internal_org_user_mgt_list",
   USER_CREATE = "internal_org_user_mgt_create",
@@ -8,6 +14,14 @@ export enum Scope {
   TRAVEL_POLICY_CREATE = "create_travel_policy",
   TRAVEL_POLICY_UPDATE = "update_travel_policy",
   TRAVEL_POLICY_DELETE = "delete_travel_policy",
+  IDP_VIEW = "internal_org_idp_view",
+  IDP_CREATE = "internal_org_idp_create",
+  IDP_UPDATE = "internal_org_idp_update",
+  IDP_DELETE = "internal_org_idp_delete",
+  UPGRADE_VIEW = "view_upgrade",
+  UPGRADE_CREATE = "create_upgrade",
+  UPGRADE_UPDATE = "update_upgrade",
+  UPGRADE_DELETE = "delete_upgrade",
 }
 
 export enum UserRole {
@@ -20,7 +34,7 @@ export enum UserRole {
 
 const ROLE_NAME_ADMIN = process.env.NEXT_PUBLIC_ASGARDEO_ADMIN_ROLE_NAME ?? "WayFinder-Admin";
 const ROLE_NAME_MEMBER = process.env.NEXT_PUBLIC_ASGARDEO_MEMBER_ROLE_NAME ?? "WayFinder-Member";
-const ROLE_NAME_IDP_MANAGER = process.env.NEXT_PUBLIC_ASGARDEO_IDP_MANAGER_ROLE_NAME ?? "Idp-Manager";
+const ROLE_NAME_IDP_MANAGER = process.env.NEXT_PUBLIC_ASGARDEO_IDP_MANAGER_ROLE_NAME ?? "IdP-Manager";
 const ROLE_NAME_BASIC_BRANDING_EDITOR = process.env.NEXT_PUBLIC_ASGARDEO_BASIC_BRANDING_EDITOR_ROLE_NAME ?? "Basic-Branding-Editor";
 const ROLE_NAME_ADVANCED_BRANDING_EDITOR = process.env.NEXT_PUBLIC_ASGARDEO_ADVANCED_BRANDING_EDITOR_ROLE_NAME ?? "Advanced-Branding-Editor";
 
@@ -60,7 +74,12 @@ export function buildUserFromTokens(
   accessPayload: Record<string, unknown>,
   idPayload: Record<string, unknown>
 ): AppUser {
-  const roles = Array.isArray(accessPayload.roles) ? (accessPayload.roles as unknown[]).map(String) : [];
+  const rawRoles = accessPayload.roles;
+  const roles = Array.isArray(rawRoles)
+    ? (rawRoles as unknown[]).map(String)
+    : typeof rawRoles === "string" && rawRoles.length > 0
+    ? [rawRoles]
+    : [];
 
   return {
     email: typeof idPayload.email === "string" ? idPayload.email : "",
