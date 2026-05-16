@@ -4,24 +4,20 @@ export interface TravelPolicy {
   id: number;
   org_id: string;
   domestic_cabin: string;
-  intl_cabin: string;
-  long_haul_hours: number;
+  max_flight_price: number;
   price_cap_percent: number;
-  min_days_advance: number;
   updated_at: string;
 }
 
 const SQL_GET = "SELECT * FROM travel_policies WHERE org_id = ?";
 
 const SQL_UPSERT = `
-  INSERT INTO travel_policies (org_id, domestic_cabin, intl_cabin, long_haul_hours, price_cap_percent, min_days_advance, updated_at)
-  VALUES (@org_id, @domestic_cabin, @intl_cabin, @long_haul_hours, @price_cap_percent, @min_days_advance, datetime('now'))
+  INSERT INTO travel_policies (org_id, domestic_cabin, max_flight_price, price_cap_percent, updated_at)
+  VALUES (@org_id, @domestic_cabin, @max_flight_price, @price_cap_percent, datetime('now'))
   ON CONFLICT(org_id) DO UPDATE SET
     domestic_cabin    = excluded.domestic_cabin,
-    intl_cabin        = excluded.intl_cabin,
-    long_haul_hours   = excluded.long_haul_hours,
+    max_flight_price  = excluded.max_flight_price,
     price_cap_percent = excluded.price_cap_percent,
-    min_days_advance  = excluded.min_days_advance,
     updated_at        = datetime('now')
 `;
 

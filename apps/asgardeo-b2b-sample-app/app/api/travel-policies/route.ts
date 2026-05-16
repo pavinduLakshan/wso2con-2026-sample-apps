@@ -14,10 +14,8 @@ export async function GET(request: NextRequest) {
 
 type UpsertBody = {
   domestic_cabin?: string;
-  intl_cabin?: string;
-  long_haul_hours?: number;
+  max_flight_price?: number;
   price_cap_percent?: number;
-  min_days_advance?: number;
 };
 
 async function parseUpsertBody(request: NextRequest): Promise<UpsertBody | NextResponse> {
@@ -35,15 +33,13 @@ export async function POST(request: NextRequest) {
   const body = await parseUpsertBody(request);
   if (body instanceof NextResponse) return body;
 
-  const { domestic_cabin, intl_cabin, long_haul_hours, price_cap_percent, min_days_advance } = body;
+  const { domestic_cabin, max_flight_price, price_cap_percent } = body;
   const { orgId } = auth.claims;
 
   const created: Omit<TravelPolicy, "id" | "org_id" | "updated_at"> = {
     domestic_cabin: domestic_cabin ?? "Economy",
-    intl_cabin: intl_cabin ?? "Business",
-    long_haul_hours: long_haul_hours ?? 8,
+    max_flight_price: max_flight_price ?? 500,
     price_cap_percent: price_cap_percent ?? 20,
-    min_days_advance: min_days_advance ?? 14,
   };
 
   const policy = upsertTravelPolicy(orgId, created);
@@ -58,17 +54,15 @@ export async function PUT(request: NextRequest) {
   const body = await parseUpsertBody(request);
   if (body instanceof NextResponse) return body;
 
-  const { domestic_cabin, intl_cabin, long_haul_hours, price_cap_percent, min_days_advance } = body;
+  const { domestic_cabin, max_flight_price, price_cap_percent } = body;
   const { orgId } = auth.claims;
 
   const defaults = getTravelPolicy(orgId);
 
   const updated: Omit<TravelPolicy, "id" | "org_id" | "updated_at"> = {
     domestic_cabin: domestic_cabin ?? defaults?.domestic_cabin ?? "Economy",
-    intl_cabin: intl_cabin ?? defaults?.intl_cabin ?? "Business",
-    long_haul_hours: long_haul_hours ?? defaults?.long_haul_hours ?? 8,
+    max_flight_price: max_flight_price ?? defaults?.max_flight_price ?? 500,
     price_cap_percent: price_cap_percent ?? defaults?.price_cap_percent ?? 20,
-    min_days_advance: min_days_advance ?? defaults?.min_days_advance ?? 14,
   };
 
   const policy = upsertTravelPolicy(orgId, updated);
