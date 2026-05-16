@@ -24,6 +24,9 @@ export enum Scope {
   UPGRADE_CREATE = "create_upgrade",
   UPGRADE_UPDATE = "update_upgrade",
   UPGRADE_DELETE = "delete_upgrade",
+  BRANDING_CREATE_BASIC = "create_basic_branding",
+  BRANDING_CREATE_ADVANCED = "create_advanced_branding",
+  BRANDING_DELETE = "delete_branding",
 }
 
 export enum UserRole {

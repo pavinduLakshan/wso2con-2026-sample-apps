@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { LandingHeader, LandingHeroCopy } from "./LandingAuth";
+import { LandingHeader, LandingHeroCopy, FooterBrand } from "./LandingAuth";
 import HeroCtaSection from "./HeroCtaSection";
 
 export default function Home() {
@@ -159,10 +158,7 @@ export default function Home() {
       </section>
 
       <footer className="public-footer">
-        <Link className="brand" href="/">
-          <img src="/wayfinder-logo.png" className="brand-logo" alt="Wayfinder" />
-          Wayfinder
-        </Link>
+        <FooterBrand />
         <p>Enterprise travel operations for agencies, finance teams, and client administrators.</p>
         <div>
           <a href="#platform">Platform</a>

@@ -667,6 +667,235 @@ export async function appRemoveIdpFromAuthSequence(accessToken: string, appId: s
   }
 }
 
+export interface BrandingConfig {
+  primaryColor: string;
+  secondaryColor: string;
+  logoUrl: string;
+  faviconUrl: string;
+  fontFamily: string;
+  fontImportUrl: string;
+  textPrimaryColor: string;
+  displayName: string;
+  supportEmail: string;
+}
+
+function buildBrandingPayload(orgId: string, config: BrandingConfig): Record<string, unknown> {
+  const makeColor = (main: string) => ({ contrastText: "", dark: "", inverted: "", light: "", main });
+
+  const makeTheme = (isDark: boolean) => ({
+    buttons: {
+      externalConnection: {
+        base: {
+          background: { backgroundColor: config.secondaryColor },
+          border: { borderRadius: "8px" },
+          font: { color: "#151E24" },
+        },
+      },
+      primary: { base: { border: { borderRadius: "8px" }, font: { color: "#FFFFFF" } } },
+      secondary: {
+        base: { border: { borderRadius: "8px" }, font: { color: isDark ? "#1F2937" : "#111827" } },
+      },
+    },
+    colors: {
+      alerts: {
+        error: makeColor(isDark ? "#ff000054" : "#ffd8d8"),
+        info: makeColor(isDark ? "#1971c233" : "#eff7fd"),
+        neutral: makeColor(isDark ? "#343a4033" : "#f8f8f9"),
+        warning: makeColor(isDark ? "#f08c0033" : "#fff6e7"),
+      },
+      background: {
+        body: makeColor(isDark ? "#111827" : "#FFFFFF"),
+        surface: makeColor(isDark ? "#1F2937" : "#F3F4F6"),
+      },
+      illustrations: {
+        accent1: makeColor("#3865B5"),
+        accent2: makeColor("#19BECE"),
+        accent3: makeColor("#FFFFFF"),
+        primary: makeColor(config.primaryColor),
+        secondary: makeColor("#E0E1E2"),
+      },
+      outlined: { default: isDark ? "#374151" : "#E5E7EB" },
+      primary: makeColor(config.primaryColor),
+      secondary: makeColor(config.secondaryColor),
+      text: {
+        primary: isDark ? "#E5E7EB" : (config.textPrimaryColor || "#111827"),
+        secondary: isDark ? "#B9B9C6" : "#00000066",
+      },
+    },
+    footer: { border: { borderColor: "" }, font: { color: "" } },
+    images: {
+      favicon: config.faviconUrl ? { imgURL: config.faviconUrl } : {},
+      logo: config.logoUrl ? { imgURL: config.logoUrl } : {},
+      myAccountLogo: { title: "Account" },
+    },
+    inputs: {
+      base: {
+        background: { backgroundColor: isDark ? "#000000" : "#FFFFFF" },
+        border: { borderColor: "", borderRadius: "8px" },
+        font: { color: "" },
+        labels: { font: { color: "" } },
+      },
+    },
+    loginBox: {
+      background: { backgroundColor: "" },
+      border: { borderColor: "", borderRadius: "12px", borderWidth: "1px" },
+      font: { color: "" },
+    },
+    loginPage: { background: { backgroundColor: "" }, font: { color: "" } },
+    typography: {
+      font: { fontFamily: config.fontFamily, importURL: config.fontImportUrl },
+      heading: { font: { color: "" } },
+    },
+  });
+
+  return {
+    locale: "en-US",
+    name: orgId,
+    preference: {
+      configs: { isBrandingEnabled: true, removeDefaultBranding: false },
+      layout: { activeLayout: "centered" },
+      organizationDetails: {
+        displayName: config.displayName,
+        supportEmail: config.supportEmail,
+      },
+      theme: {
+        activeTheme: "LIGHT",
+        LIGHT: makeTheme(false),
+        DARK: makeTheme(true),
+      },
+      urls: { cookiePolicyURL: "", privacyPolicyURL: "", termsOfUseURL: "" },
+    },
+    type: "ORG",
+  };
+}
+
+function extractBrandingConfig(json: Record<string, unknown>): BrandingConfig {
+  const pref = (json?.preference as Record<string, unknown>) ?? {};
+  const theme = (pref?.theme as Record<string, unknown>) ?? {};
+  const light = (theme?.LIGHT as Record<string, unknown>) ?? {};
+  const colors = (light?.colors as Record<string, unknown>) ?? {};
+  const primary = (colors?.primary as Record<string, unknown>) ?? {};
+  const secondary = (colors?.secondary as Record<string, unknown>) ?? {};
+  const text = (colors?.text as Record<string, unknown>) ?? {};
+  const images = (light?.images as Record<string, unknown>) ?? {};
+  const logo = (images?.logo as Record<string, unknown>) ?? {};
+  const favicon = (images?.favicon as Record<string, unknown>) ?? {};
+  const typography = (light?.typography as Record<string, unknown>) ?? {};
+  const font = (typography?.font as Record<string, unknown>) ?? {};
+  const orgDetails = (pref?.organizationDetails as Record<string, unknown>) ?? {};
+
+  return {
+    primaryColor: typeof primary.main === "string" ? primary.main : "#2563EB",
+    secondaryColor: typeof secondary.main === "string" ? secondary.main : "#FBBF24",
+    logoUrl: typeof logo.imgURL === "string" ? logo.imgURL : "",
+    faviconUrl: typeof favicon.imgURL === "string" ? favicon.imgURL : "",
+    fontFamily: typeof font.fontFamily === "string" ? font.fontFamily : "Inter",
+    fontImportUrl: typeof font.importURL === "string" ? font.importURL : "https://fonts.googleapis.com/css?family=Inter",
+    textPrimaryColor: typeof text.primary === "string" ? text.primary : "#111827",
+    displayName: typeof orgDetails.displayName === "string" ? orgDetails.displayName : "",
+    supportEmail: typeof orgDetails.supportEmail === "string" ? orgDetails.supportEmail : "",
+  };
+}
+
+export async function brandingGet(accessToken: string): Promise<BrandingConfig | null> {
+  const response = await fetch(
+    `${getBaseUrl()}/o/api/server/v1/branding-preference?type=ORG&locale=en-US`,
+    {
+      method: "GET",
+      headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
+    }
+  );
+
+  if (response.status === 404) return null;
+
+  const json = await response.json().catch(() => ({})) as Record<string, unknown>;
+
+  if (!response.ok) {
+    const message =
+      typeof json?.description === "string" ? json.description :
+      typeof json?.message === "string" ? json.message :
+      "Failed to fetch branding preference.";
+    console.error("[asgardeo/client] brandingGet failed:", response.status, JSON.stringify(json));
+    throw new Error(message);
+  }
+
+  return extractBrandingConfig(json);
+}
+
+export async function brandingCreate(
+  accessToken: string,
+  orgId: string,
+  config: BrandingConfig
+): Promise<void> {
+  const response = await fetch(`${getBaseUrl()}/o/api/server/v1/branding-preference`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(buildBrandingPayload(orgId, config)),
+  });
+  
+  console.log(response);
+  if (!response.ok) {
+    const json = await response.json().catch(() => ({})) as Record<string, unknown>;
+    const message =
+      typeof json?.description === "string" ? json.description :
+      typeof json?.message === "string" ? json.message :
+      "Failed to create branding preference.";
+    console.error("[asgardeo/client] brandingCreate failed:", response.status, JSON.stringify(json));
+    throw new Error(message);
+  }
+}
+
+export async function brandingUpdate(
+  accessToken: string,
+  orgId: string,
+  config: BrandingConfig
+): Promise<void> {
+  const response = await fetch(`${getBaseUrl()}/o/api/server/v1/branding-preference`, {
+    method: "PUT",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(buildBrandingPayload(orgId, config)),
+  });
+
+  if (!response.ok) {
+    const json = await response.json().catch(() => ({})) as Record<string, unknown>;
+    const message =
+      typeof json?.description === "string" ? json.description :
+      typeof json?.message === "string" ? json.message :
+      "Failed to update branding preference.";
+    console.error("[asgardeo/client] brandingUpdate failed:", response.status, JSON.stringify(json));
+    throw new Error(message);
+  }
+}
+
+export async function brandingDelete(accessToken: string, orgId: string): Promise<void> {
+  const params = new URLSearchParams({ type: "ORG", locale: "en-US", name: orgId });
+  const response = await fetch(
+    `${getBaseUrl()}/o/api/server/v1/branding-preference?${params}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  );
+
+  if (!response.ok && response.status !== 404) {
+    const json = await response.json().catch(() => null);
+    const message =
+      typeof json?.description === "string" ? json.description :
+      typeof json?.message === "string" ? json.message :
+      "Failed to delete branding preference.";
+    console.error("[asgardeo/client] brandingDelete failed:", response.status, JSON.stringify(json));
+    throw new Error(message);
+  }
+}
+
 export async function scimAssignRoleToUser(accessToken: string, roleId: string, userId: string): Promise<void> {
   const response = await fetch(`${getBaseUrl()}/o/scim2/v2/Roles/${roleId}`, {
     body: JSON.stringify({
