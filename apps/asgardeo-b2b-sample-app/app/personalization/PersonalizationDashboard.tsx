@@ -510,6 +510,7 @@ export default function PersonalizationDashboard({ roles }: { roles: UserRole[] 
       }
       setSavedConfig(null);
       setForm(DEFAULTS);
+      successTimerRef.current = setTimeout(() => window.location.reload(), 1500);
     } catch {
       setSaveError("Failed to reset branding.");
     } finally {
