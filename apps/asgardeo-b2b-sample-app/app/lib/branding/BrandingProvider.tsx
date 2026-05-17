@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import LoadingScreen from "../../LoadingScreen";
 import { useAuth } from "../auth/client";
@@ -46,6 +47,7 @@ function hexToSidebar(hex: string): string {
 
 export function BrandingProvider({ children }: { children: ReactNode }) {
   const { accessToken, isSignedIn } = useAuth();
+  const pathname = usePathname();
   const [branding, setBranding] = useState<BrandingConfig | null>(null);
   const [brandingResolved, setBrandingResolved] = useState(false);
 
@@ -117,7 +119,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     if (branding.displayName) {
       document.title = branding.displayName;
     }
-  }, [branding]);
+  }, [branding, pathname]);
 
   return (
     <BrandingContext.Provider value={{ branding, brandingResolved }}>
