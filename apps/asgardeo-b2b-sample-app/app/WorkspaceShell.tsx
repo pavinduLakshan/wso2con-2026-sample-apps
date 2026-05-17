@@ -9,6 +9,7 @@ import ImpersonationBanner from "./ImpersonationBanner";
 import LoadingScreen from "./LoadingScreen";
 import WorkspaceLoader from "./WorkspaceLoader";
 import { UserRole } from "./lib/auth/utils";
+import { useBranding } from "./lib/branding/BrandingProvider";
 
 const icon = (d: string | string[], extraProps?: Record<string, string>) => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...extraProps}>
@@ -117,6 +118,9 @@ export default function WorkspaceShell({
   title: string;
 }>) {
   const { isLoading: authLoading, user } = useAuth();
+  const { branding } = useBranding();
+  const logoSrc = branding?.logoUrl || "/wayfinder-logo.png";
+  const brandLabel = branding?.displayName || "Wayfinder";
 
   if (authLoading) {
     return <LoadingScreen description="Please wait while we set up your workspace." steps={[]} title="Loading your workspace…" />;
@@ -128,8 +132,8 @@ export default function WorkspaceShell({
         <ImpersonationBanner />
         <header className="member-topbar">
           <Link className="sidebar-brand" href="/">
-            <img src="/wayfinder-logo.png" className="sidebar-brand-mark" alt="Wayfinder" />
-            <span className="sidebar-brand-label">Wayfinder</span>
+            <img src={logoSrc} className="sidebar-brand-mark" alt={brandLabel} />
+            <span className="sidebar-brand-label">{brandLabel}</span>
           </Link>
           <ProfileActions />
         </header>

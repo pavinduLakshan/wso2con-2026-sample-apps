@@ -1,372 +1,693 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import WorkspaceShell from "../WorkspaceShell";
+import { useAuth } from "../lib/auth/client";
 import { UserRole } from "../lib/auth/utils";
 
-type TripType = "one-way" | "round-trip" | "multi-city";
-type PolicyStatus = "in-policy" | "out-of-policy" | "approval-required";
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Fare {
+interface TravelPolicy {
+  domestic_cabin: string;
+  max_flight_price: number;
+  price_cap_percent: number;
+}
+
+interface Flight {
   id: string;
+  from_city: string;
+  to_city: string;
   airline: string;
-  route: string;
-  cabin: string;
-  price: string;
+  departure_time: string;
+  arrival_time: string;
   duration: string;
-  refundable: boolean;
-  gds: string;
-  policyStatus: PolicyStatus;
+  stops: number;
+  price: number;
+  currency: string;
+  cabin: string;
+  dates: string;
+  tags: string[];
 }
 
-interface Segment {
-  from: string;
-  to: string;
-  date: string;
+interface Booking {
+  id: string;
+  booking_reference: string;
+  booked_for_name: string | null;
+  booked_by_name: string;
+  flight_id: string;
+  from_city: string;
+  to_city: string;
+  airline: string;
+  departure_time: string;
+  arrival_time: string;
+  duration: string;
+  cabin: string;
+  dates: string;
+  travelers: number;
+  booking_price: number | null;
+  status: string;
+  created_at: string;
 }
 
-const ALL_FARES: Fare[] = [
-  { id: "f1", airline: "SriLankan Airlines", route: "Colombo → Singapore", cabin: "Economy", price: "$482", duration: "3h 30m", refundable: true, gds: "Amadeus", policyStatus: "in-policy" },
-  { id: "f2", airline: "Singapore Airlines", route: "Colombo → Singapore", cabin: "Economy", price: "$540", duration: "3h 45m", refundable: false, gds: "Sabre", policyStatus: "in-policy" },
-  { id: "f3", airline: "Emirates", route: "Colombo → Singapore", cabin: "Business", price: "$2,180", duration: "4h 00m", refundable: true, gds: "Amadeus", policyStatus: "out-of-policy" },
-  { id: "f4", airline: "Malaysia Airlines", route: "Colombo → Singapore", cabin: "Economy", price: "$468", duration: "4h 15m", refundable: false, gds: "Galileo", policyStatus: "in-policy" },
-  { id: "f5", airline: "Qatar Airways", route: "Colombo → Tokyo", cabin: "Premium Economy", price: "$1,320", duration: "12h 10m", refundable: true, gds: "Amadeus", policyStatus: "approval-required" },
-  { id: "f6", airline: "Cathay Pacific", route: "Colombo → London", cabin: "Economy", price: "$1,140", duration: "14h 20m", refundable: false, gds: "Sabre", policyStatus: "in-policy" },
-  { id: "f7", airline: "Air India", route: "Colombo → London", cabin: "Premium Economy", price: "$1,480", duration: "15h 05m", refundable: true, gds: "Galileo", policyStatus: "approval-required" },
-  { id: "f8", airline: "British Airways", route: "Colombo → London", cabin: "Business", price: "$3,640", duration: "13h 55m", refundable: true, gds: "Sabre", policyStatus: "out-of-policy" },
-];
+interface OrgUser {
+  id: string;
+  name: string;
+  email: string;
+}
 
-const TRAVELERS = [
-  "Ava Fernando",
-  "Maya Silva",
-  "Nimal Perera",
-  "Priya Jayawardena",
-  "Tomas Ruiz",
-  "Lisa Chen",
-];
+type PolicyStatus = "in-policy" | "approval-required" | "out-of-policy";
+
+interface PolicyResult {
+  status: PolicyStatus;
+  violations: string[];
+}
+
+// ─── Policy helpers ───────────────────────────────────────────────────────────
+
+const CABIN_RANK: Record<string, number> = {
+  "Economy": 0,
+  "Premium Economy": 1,
+  "Business": 2,
+  "First Class": 3,
+};
+
+function evaluatePolicy(flight: Flight, policy: TravelPolicy | null): PolicyResult {
+  if (!policy) return { status: "in-policy", violations: [] };
+
+  const violations: string[] = [];
+  const priceCap = policy.max_flight_price;
+  const approvalCap = priceCap * (1 + policy.price_cap_percent / 100);
+  const allowedCabinRank = CABIN_RANK[policy.domestic_cabin] ?? 0;
+  const flightCabinRank = CABIN_RANK[flight.cabin] ?? 0;
+
+  const priceOver = flight.price > priceCap;
+  const priceWayOver = flight.price > approvalCap;
+  const cabinOver = flightCabinRank > allowedCabinRank;
+  const cabinWayOver = flightCabinRank > allowedCabinRank + 1;
+
+  if (priceWayOver) violations.push(`Price $${flight.price} exceeds $${approvalCap.toFixed(0)} limit`);
+  else if (priceOver) violations.push(`Price $${flight.price} exceeds $${priceCap} cap`);
+
+  if (cabinWayOver) violations.push(`${flight.cabin} class not allowed (policy: ${policy.domestic_cabin})`);
+  else if (cabinOver) violations.push(`${flight.cabin} class above allowed ${policy.domestic_cabin}`);
+
+  if (priceWayOver || cabinWayOver) return { status: "out-of-policy", violations };
+  if (priceOver || cabinOver) return { status: "approval-required", violations };
+  return { status: "in-policy", violations: [] };
+}
+
+// ─── Subcomponents ────────────────────────────────────────────────────────────
 
 const POLICY_LABEL: Record<PolicyStatus, string> = {
-  "in-policy": "In policy",
-  "out-of-policy": "Out of policy",
+  "in-policy": "Under policy",
   "approval-required": "Approval required",
+  "out-of-policy": "Out of policy",
 };
 
-const POLICY_CLASS: Record<PolicyStatus, string> = {
-  "in-policy": "success-pill",
-  "out-of-policy": "out-of-policy-pill",
-  "approval-required": "warning-pill",
-};
+function PolicyBadge({ status }: { status: PolicyStatus }) {
+  const cls =
+    status === "in-policy"
+      ? "flight-policy-badge flight-policy-badge--ok"
+      : status === "approval-required"
+      ? "flight-policy-badge flight-policy-badge--warn"
+      : "flight-policy-badge flight-policy-badge--bad";
+  return <em className={cls}>{POLICY_LABEL[status]}</em>;
+}
+
+function FlightCard({
+  flight,
+  policyResult,
+  isMember,
+  onBook,
+  booking,
+  isBooking,
+}: {
+  flight: Flight;
+  policyResult: PolicyResult;
+  isMember: boolean;
+  onBook: (flight: Flight) => void;
+  booking?: Booking;
+  isBooking: boolean;
+}) {
+  const isOutOfPolicy = policyResult.status === "out-of-policy";
+  const disabled = isBooking || (isMember && isOutOfPolicy) || !!booking;
+
+  return (
+    <article className={`flight-card${isOutOfPolicy && isMember ? " flight-card--blocked" : ""}`}>
+      <div className="flight-card-header">
+        <div className="flight-card-route">
+          <span className="flight-card-city">{flight.from_city}</span>
+          <span className="flight-card-arrow">→</span>
+          <span className="flight-card-city">{flight.to_city}</span>
+        </div>
+        <PolicyBadge status={policyResult.status} />
+      </div>
+
+      <div className="flight-card-meta">
+        <div className="flight-card-times">
+          <span className="flight-time">{flight.departure_time}</span>
+          <span className="flight-duration">{flight.duration}</span>
+          <span className="flight-time">{flight.arrival_time}</span>
+        </div>
+        <div className="flight-card-details">
+          <span className="flight-airline">{flight.airline}</span>
+          <span className="flight-cabin-tag">{flight.cabin}</span>
+          {flight.stops === 0 && <span className="flight-nonstop">Nonstop</span>}
+          {flight.stops > 0 && <span className="flight-stops">{flight.stops} stop{flight.stops > 1 ? "s" : ""}</span>}
+        </div>
+      </div>
+
+      {flight.tags.length > 0 && (
+        <div className="flight-tags">
+          {flight.tags.map((tag) => (
+            <span key={tag} className="flight-tag">{tag}</span>
+          ))}
+        </div>
+      )}
+
+      {policyResult.violations.length > 0 && (
+        <div className="flight-violations">
+          {policyResult.violations.map((v) => (
+            <span key={v} className="violation-item">⚠ {v}</span>
+          ))}
+        </div>
+      )}
+
+      <div className="flight-card-footer">
+        <div>
+          <span className="flight-price">${flight.price.toLocaleString()}</span>
+          <span className="flight-price-label">&nbsp;/ person</span>
+        </div>
+        <div className="flight-card-actions">
+          <span className="flight-dates-small">{flight.dates}</span>
+          {booking ? (
+            <span className="flight-booked-badge">Booked · {booking.booking_reference}</span>
+          ) : isMember && isOutOfPolicy ? (
+            <button className="button button-ghost" disabled title={policyResult.violations.join("; ")}>
+              Not available
+            </button>
+          ) : (
+            <button
+              className="button button-primary"
+              disabled={disabled}
+              onClick={() => onBook(flight)}
+            >
+              {isBooking ? "Booking…" : "Book flight"}
+            </button>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function BookingRow({
+  booking,
+  onCancel,
+  isCancelling,
+  isAdmin,
+}: {
+  booking: Booking;
+  onCancel: (id: string) => void;
+  isCancelling: boolean;
+  isAdmin?: boolean;
+}) {
+  const isConfirmed = booking.status === "confirmed";
+  return (
+    <article className="booking-row">
+      <div className="booking-row-info">
+        <div className="booking-row-route">
+          <strong>{booking.from_city} → {booking.to_city}</strong>
+          <span className="booking-ref">#{booking.booking_reference}</span>
+        </div>
+        <div className="booking-row-meta">
+          <span>{booking.airline}</span>
+          <span>·</span>
+          <span>{booking.cabin}</span>
+          <span>·</span>
+          <span>{booking.dates}</span>
+          {isAdmin && (
+            <>
+              <span>·</span>
+              <span>Booked by: {booking.booked_by_name}</span>
+            </>
+          )}
+          {booking.booked_for_name && (
+            <>
+              <span>·</span>
+              <span>For: {booking.booked_for_name}</span>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="booking-row-right">
+        {booking.booking_price != null && (
+          <strong className="booking-price">${booking.booking_price.toLocaleString()}</strong>
+        )}
+        <em className={isConfirmed ? "success-pill" : "booking-cancelled-pill"}>
+          {isConfirmed ? "Confirmed" : "Cancelled"}
+        </em>
+        {isConfirmed && (
+          <button
+            className="button button-ghost booking-cancel-btn"
+            disabled={isCancelling}
+            onClick={() => onCancel(booking.id)}
+          >
+            {isCancelling ? "Cancelling…" : "Cancel"}
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function BookingsDashboard({ roles }: { roles: UserRole[] }) {
+  const { accessToken, user } = useAuth();
   const isAdmin = roles.includes(UserRole.ADMIN);
+  const isMember = !isAdmin;
 
-  const [tripType, setTripType] = useState<TripType>("one-way");
-  const [traveler, setTraveler] = useState(TRAVELERS[0]);
-  const [segments, setSegments] = useState<Segment[]>([
-    { from: "Colombo", to: "Singapore", date: "Jun 10, 2026" },
-  ]);
-  const [returnDate, setReturnDate] = useState("Jun 17, 2026");
-  const [gdsFilter, setGdsFilter] = useState("All");
-  const [cabinFilter, setCabinFilter] = useState("All");
-  const [refundFilter, setRefundFilter] = useState("All");
+  // ── State ────────────────────────────────────────────────────────────────
+  const [policy, setPolicy] = useState<TravelPolicy | null>(null);
+  const [policyLoading, setPolicyLoading] = useState(true);
+
+  const [flights, setFlights] = useState<Flight[]>([]);
+  const [flightsLoading, setFlightsLoading] = useState(false);
+  const [flightsError, setFlightsError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
 
-  function switchTripType(t: TripType) {
-    setTripType(t);
-    if (t === "multi-city") {
-      setSegments([
-        { from: "Colombo", to: "Singapore", date: "Jun 10, 2026" },
-        { from: "Singapore", to: "Tokyo", date: "Jun 14, 2026" },
-      ]);
-    } else {
-      setSegments([{ from: "Colombo", to: "Singapore", date: "Jun 10, 2026" }]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
+
+  const [orgUsers, setOrgUsers] = useState<OrgUser[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [selectedUserName, setSelectedUserName] = useState<string>("");
+
+  const [fromCity, setFromCity] = useState("");
+  const [toCity, setToCity] = useState("");
+  const [cabinFilter, setCabinFilter] = useState("All");
+
+  const [bookingFlight, setBookingFlight] = useState<string | null>(null);
+  const [bookingError, setBookingError] = useState<string | null>(null);
+  const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
+
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
+  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Data loading ─────────────────────────────────────────────────────────
+
+  const loadPolicy = useCallback(() => {
+    if (!accessToken) return;
+    fetch("/api/travel-policies", { headers: { Authorization: `Bearer ${accessToken}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d: { policy?: TravelPolicy | null }) => { if (d.policy) setPolicy(d.policy); })
+      .catch(() => {})
+      .finally(() => setPolicyLoading(false));
+  }, [accessToken]);
+
+  const loadBookings = useCallback(() => {
+    if (!accessToken) return;
+    const url = isAdmin ? "/api/bookings?all=true" : "/api/bookings";
+    fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d: { bookings?: Booking[] }) => { setBookings(d.bookings ?? []); })
+      .catch(() => {})
+      .finally(() => setBookingsLoading(false));
+  }, [accessToken, isAdmin]);
+
+  const loadOrgUsers = useCallback(() => {
+    if (!accessToken || !isAdmin) return;
+    fetch("/api/organization/users", { headers: { Authorization: `Bearer ${accessToken}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d: { users?: OrgUser[] }) => {
+        const users = d.users ?? [];
+        setOrgUsers(users);
+        if (users.length > 0) {
+          setSelectedUserId(users[0].id);
+          setSelectedUserName(users[0].name || users[0].email);
+        }
+      })
+      .catch(() => {});
+  }, [accessToken, isAdmin]);
+
+  useEffect(() => {
+    loadPolicy();
+    loadBookings();
+    loadOrgUsers();
+  }, [loadPolicy, loadBookings, loadOrgUsers]);
+
+  // ── Search ───────────────────────────────────────────────────────────────
+
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    if (!accessToken) return;
+
+    setFlightsLoading(true);
+    setFlightsError(null);
+    setSearched(true);
+    setBookingError(null);
+
+    const params = new URLSearchParams();
+    if (fromCity) params.set("from", fromCity);
+    if (toCity) params.set("to", toCity);
+    if (cabinFilter !== "All") params.set("cabin", cabinFilter);
+
+    fetch(`/api/flights?${params}`, { headers: { Authorization: `Bearer ${accessToken}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((d: { flights?: Flight[] }) => setFlights(d.flights ?? []))
+      .catch(() => setFlightsError("Failed to load flights. Please try again."))
+      .finally(() => setFlightsLoading(false));
+  }
+
+  // ── Booking ──────────────────────────────────────────────────────────────
+
+  function handleBook(flight: Flight) {
+    if (!accessToken || bookingFlight) return;
+    setBookingFlight(flight.id);
+    setBookingError(null);
+    setBookingSuccess(null);
+
+    const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || "User";
+
+    const body: Record<string, unknown> = {
+      flightId: flight.id,
+      travelers: 1,
+      bookedByName: displayName,
+    };
+
+    if (isAdmin && selectedUserId) {
+      body.bookedForUserId = selectedUserId;
+      body.bookedForName = selectedUserName;
     }
-    setSearched(false);
+
+    fetch("/api/bookings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(body),
+    })
+      .then((r) => r.json().then((d) => ({ ok: r.ok, data: d })))
+      .then(({ ok, data }) => {
+        if (!ok) throw new Error(data.error ?? "Booking failed");
+        setBookings((prev) => [data.booking, ...prev]);
+        setBookingSuccess(`Flight ${flight.from_city} → ${flight.to_city} booked! Ref: ${data.booking.booking_reference}`);
+        if (successTimer.current) clearTimeout(successTimer.current);
+        successTimer.current = setTimeout(() => setBookingSuccess(null), 6000);
+      })
+      .catch((err: Error) => setBookingError(err.message))
+      .finally(() => setBookingFlight(null));
   }
 
-  function addSegment() {
-    setSegments((prev) => [...prev, { from: "", to: "", date: "" }]);
+  // ── Cancel ───────────────────────────────────────────────────────────────
+
+  function handleCancel(bookingId: string) {
+    if (!accessToken || cancellingId) return;
+    setCancellingId(bookingId);
+    setCancelError(null);
+
+    fetch(`/api/bookings/${bookingId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+      .then((r) => r.json().then((d) => ({ ok: r.ok, data: d })))
+      .then(({ ok, data }) => {
+        if (!ok) throw new Error(data.error ?? "Cancellation failed");
+        setBookings((prev) => prev.map((b) => b.id === bookingId ? { ...b, status: "cancelled" } : b));
+      })
+      .catch((err: Error) => setCancelError(err.message))
+      .finally(() => setCancellingId(null));
   }
 
-  function removeSegment(index: number) {
-    setSegments((prev) => prev.filter((_, i) => i !== index));
-  }
+  // ── Derived data ─────────────────────────────────────────────────────────
 
-  function updateSegment(index: number, field: keyof Segment, value: string) {
-    setSegments((prev) => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)));
-  }
+  const bookedFlightIds = new Set(
+    bookings.filter((b) => b.status === "confirmed").map((b) => b.flight_id)
+  );
+  const bookingByFlightId = Object.fromEntries(
+    bookings.filter((b) => b.status === "confirmed").map((b) => [b.flight_id, b])
+  );
 
-  const filteredFares = ALL_FARES.filter((f) => {
-    if (gdsFilter !== "All" && f.gds !== gdsFilter) return false;
-    if (cabinFilter !== "All" && f.cabin !== cabinFilter) return false;
-    if (refundFilter === "Refundable" && !f.refundable) return false;
-    if (refundFilter === "Non-refundable" && f.refundable) return false;
-    return true;
+  const sortedFlights = [...flights].sort((a, b) => {
+    const pa = evaluatePolicy(a, policy);
+    const pb = evaluatePolicy(b, policy);
+    const ORDER: Record<PolicyStatus, number> = { "in-policy": 0, "approval-required": 1, "out-of-policy": 2 };
+    const statusDiff = ORDER[pa.status] - ORDER[pb.status];
+    if (statusDiff !== 0) return statusDiff;
+    return a.price - b.price;
   });
 
-  const sortedFares = [...filteredFares].sort((a, b) => {
-    const order: Record<PolicyStatus, number> = { "in-policy": 0, "approval-required": 1, "out-of-policy": 2 };
-    return order[a.policyStatus] - order[b.policyStatus];
-  });
+  const confirmedBookings = bookings.filter((b) => b.status === "confirmed");
+  const cancelledBookings = bookings.filter((b) => b.status === "cancelled");
+
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <WorkspaceShell
       activeHref="/bookings"
       eyebrow={isAdmin ? "Admin workspace" : "Member workspace"}
       roles={roles}
-      title={isAdmin ? "Book travel for any employee" : "Book your next flight"}
+      title={isAdmin ? "Book flights for your team" : "Book your next flight"}
     >
+      {/* ── Banners ──────────────────────────────────────────────────────── */}
+      {bookingSuccess && (
+        <div className="form-status" style={{ marginBottom: 16 }}>
+          ✓ {bookingSuccess}
+        </div>
+      )}
+      {bookingError && (
+        <div className="form-error" style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>{bookingError}</span>
+          <button onClick={() => setBookingError(null)} style={{ background: "none", border: "none", cursor: "pointer" }} aria-label="Dismiss">✕</button>
+        </div>
+      )}
+      {cancelError && (
+        <div className="form-error" style={{ marginBottom: 16 }}>
+          {cancelError}
+        </div>
+      )}
+
+      {/* ── Policy summary (Member view) ──────────────────────────────── */}
+      {isMember && !policyLoading && (
+        <div className="booking-policy-banner">
+          {policy ? (
+            <>
+              <div className="policy-banner-icon">📋</div>
+              <div>
+                <strong>Your travel policy</strong>
+                <span>
+                  Cabin up to <b>{policy.domestic_cabin}</b> · Max <b>${policy.max_flight_price}</b>/ticket
+                  · Up to <b>{policy.price_cap_percent}%</b> over cap requires approval
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="policy-banner-icon">🌐</div>
+              <div>
+                <strong>No travel policy set</strong>
+                <span>Your organization has no active travel policy. All flights are available.</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Search panel ─────────────────────────────────────────────────── */}
       <section className="booking-hero">
         <div>
           <p className="eyebrow">Flight search</p>
-          <h2>Flight search with policy checks built in.</h2>
+          <h2>
+            {isAdmin
+              ? "Search and book for any team member."
+              : "Find flights that fit your travel policy."}
+          </h2>
           <p>
             {isAdmin
-              ? "Book on behalf of employees. All selections are verified against active travel policies."
-              : "Compare fares and choose compliant options for your work travel."}
+              ? "All results show policy status. Book compliant options directly or override with approval."
+              : "In-policy flights are highlighted. Out-of-policy options are shown but blocked."}
           </p>
         </div>
 
-        <div className="booking-form-area">
-          <div className="trip-type-toggle">
-            {(["one-way", "round-trip", "multi-city"] as TripType[]).map((t) => (
-              <button
-                key={t}
-                className={`trip-type-btn${tripType === t ? " active" : ""}`}
-                type="button"
-                onClick={() => switchTripType(t)}
+        <form className="booking-search-form" onSubmit={handleSearch}>
+          {isAdmin && orgUsers.length > 0 && (
+            <label className="booking-search-label">
+              Book for
+              <select
+                className="booking-search-input"
+                value={selectedUserId}
+                onChange={(e) => {
+                  setSelectedUserId(e.target.value);
+                  const u = orgUsers.find((o) => o.id === e.target.value);
+                  setSelectedUserName(u?.name || u?.email || "");
+                }}
               >
-                {t === "one-way" ? "One way" : t === "round-trip" ? "Round trip" : "Multi-city"}
-              </button>
-            ))}
-          </div>
-
-          <form
-            className="search-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              setSearched(true);
-            }}
-          >
-            {isAdmin && (
-              <label>
-                Book for
-                <select
-                  className="search-select"
-                  value={traveler}
-                  onChange={(e) => setTraveler(e.target.value)}
-                >
-                  {TRAVELERS.map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
-              </label>
-            )}
-
-            {tripType !== "multi-city" ? (
-              <>
-                <label>
-                  From
-                  <input
-                    value={segments[0]?.from ?? ""}
-                    onChange={(e) => updateSegment(0, "from", e.target.value)}
-                  />
-                </label>
-                <label>
-                  To
-                  <input
-                    value={segments[0]?.to ?? ""}
-                    onChange={(e) => updateSegment(0, "to", e.target.value)}
-                  />
-                </label>
-                <label>
-                  Depart
-                  <input
-                    value={segments[0]?.date ?? ""}
-                    onChange={(e) => updateSegment(0, "date", e.target.value)}
-                  />
-                </label>
-                {tripType === "round-trip" && (
-                  <label>
-                    Return
-                    <input
-                      value={returnDate}
-                      onChange={(e) => setReturnDate(e.target.value)}
-                    />
-                  </label>
-                )}
-              </>
-            ) : (
-              <div className="multi-city-segments">
-                {segments.map((seg, i) => (
-                  <div className="flight-segment" key={i}>
-                    <span className="segment-label">Flight {i + 1}</span>
-                    {segments.length > 2 && (
-                      <button
-                        className="remove-segment-btn"
-                        type="button"
-                        onClick={() => removeSegment(i)}
-                      >
-                        Remove
-                      </button>
-                    )}
-                    <div className="segment-fields">
-                      <label>
-                        From
-                        <input
-                          value={seg.from}
-                          onChange={(e) => updateSegment(i, "from", e.target.value)}
-                        />
-                      </label>
-                      <label>
-                        To
-                        <input
-                          value={seg.to}
-                          onChange={(e) => updateSegment(i, "to", e.target.value)}
-                        />
-                      </label>
-                      <label>
-                        Date
-                        <input
-                          value={seg.date}
-                          onChange={(e) => updateSegment(i, "date", e.target.value)}
-                        />
-                      </label>
-                    </div>
-                  </div>
+                {orgUsers.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name || u.email}</option>
                 ))}
-                {segments.length < 5 && (
-                  <button
-                    className="button button-secondary add-segment-btn"
-                    type="button"
-                    onClick={addSegment}
-                  >
-                    + Add flight
-                  </button>
-                )}
-              </div>
-            )}
-
-            <button className="button button-primary" type="submit">
-              Search flights
-            </button>
-          </form>
-        </div>
-      </section>
-
-      {searched && (
-        <>
-          <div className="filter-bar">
-            <div className="filter-group">
-              <label>GDS</label>
-              <select value={gdsFilter} onChange={(e) => setGdsFilter(e.target.value)}>
-                <option>All</option>
-                <option>Amadeus</option>
-                <option>Sabre</option>
-                <option>Galileo</option>
               </select>
-            </div>
-            <div className="filter-group">
-              <label>Cabin class</label>
-              <select value={cabinFilter} onChange={(e) => setCabinFilter(e.target.value)}>
+            </label>
+          )}
+          <div className="booking-search-row">
+            <label className="booking-search-label">
+              From
+              <input
+                className="booking-search-input"
+                placeholder="e.g. New York"
+                value={fromCity}
+                onChange={(e) => setFromCity(e.target.value)}
+              />
+            </label>
+            <label className="booking-search-label">
+              To
+              <input
+                className="booking-search-input"
+                placeholder="e.g. Los Angeles"
+                value={toCity}
+                onChange={(e) => setToCity(e.target.value)}
+              />
+            </label>
+            <label className="booking-search-label">
+              Cabin class
+              <select
+                className="booking-search-input"
+                value={cabinFilter}
+                onChange={(e) => setCabinFilter(e.target.value)}
+              >
                 <option>All</option>
                 <option>Economy</option>
                 <option>Premium Economy</option>
                 <option>Business</option>
                 <option>First Class</option>
               </select>
+            </label>
+          </div>
+          <button className="button button-primary" type="submit" style={{ justifySelf: "start" }}>
+            Search flights
+          </button>
+        </form>
+      </section>
+
+      {/* ── Results ──────────────────────────────────────────────────────── */}
+      {searched && (
+        <section className="workspace-panel" style={{ marginBottom: 18 }}>
+          <div className="section-heading" style={{ marginBottom: 14 }}>
+            <div>
+              <p className="eyebrow">Search results</p>
+              <h2>Available flights</h2>
             </div>
-            <div className="filter-group">
-              <label>Refundability</label>
-              <select value={refundFilter} onChange={(e) => setRefundFilter(e.target.value)}>
-                <option>All</option>
-                <option>Refundable</option>
-                <option>Non-refundable</option>
-              </select>
-            </div>
-            <div className="filter-results-count">
-              {sortedFares.length} flight{sortedFares.length !== 1 ? "s" : ""} found
-            </div>
+            <span className="flight-count-badge">
+              {flightsLoading ? "…" : `${sortedFlights.length} flight${sortedFlights.length !== 1 ? "s" : ""}`}
+            </span>
           </div>
 
-          <section className="workspace-panel">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Available flights</p>
-                <h2>Compliant options first</h2>
-              </div>
-              {isAdmin && (
-                <button className="button button-secondary" type="button">
-                  Export quote
-                </button>
-              )}
-            </div>
-            <div className="flight-list">
-              {sortedFares.map((fare) => (
-                <article
-                  className={`flight-row-extended${fare.policyStatus === "out-of-policy" ? " flight-row--out-of-policy" : ""}`}
-                  key={fare.id}
-                >
-                  <div className="flight-info">
-                    <strong>{fare.airline}</strong>
-                    <span>{fare.route}</span>
-                    <span className="flight-meta">
-                      {fare.cabin} · {fare.duration} · {fare.gds} ·{" "}
-                      {fare.refundable ? "Refundable" : "Non-refundable"}
-                    </span>
-                  </div>
-                  <strong className="fare-price">{fare.price}</strong>
-                  <em className={POLICY_CLASS[fare.policyStatus]}>
-                    {POLICY_LABEL[fare.policyStatus]}
-                  </em>
-                  <button
-                    className={`button ${
-                      fare.policyStatus === "out-of-policy" && !isAdmin
-                        ? "button-ghost"
-                        : "button-secondary"
-                    }`}
-                    disabled={fare.policyStatus === "out-of-policy" && !isAdmin}
-                    type="button"
-                  >
-                    {fare.policyStatus === "out-of-policy" && !isAdmin ? "Not available" : "Select"}
-                  </button>
-                </article>
+          {flightsLoading && (
+            <div className="flights-skeleton">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flight-card-skeleton" aria-hidden="true">
+                  <div className="skeleton-block" style={{ height: 18, width: "40%", marginBottom: 10 }} />
+                  <div className="skeleton-block" style={{ height: 14, width: "60%", marginBottom: 8 }} />
+                  <div className="skeleton-block" style={{ height: 14, width: "30%" }} />
+                </div>
               ))}
-              {sortedFares.length === 0 && (
-                <p className="empty-state">No flights match your current filters.</p>
-              )}
             </div>
-          </section>
-        </>
+          )}
+
+          {!flightsLoading && flightsError && (
+            <div className="form-error">{flightsError}</div>
+          )}
+
+          {!flightsLoading && !flightsError && sortedFlights.length === 0 && (
+            <p className="empty-state-text">No flights found. Try different search criteria or clear the filters.</p>
+          )}
+
+          {!flightsLoading && !flightsError && sortedFlights.length > 0 && (
+            <div className="flight-card-list">
+              {sortedFlights.map((flight) => {
+                const pr = evaluatePolicy(flight, isMember ? policy : null);
+                return (
+                  <FlightCard
+                    key={flight.id}
+                    flight={flight}
+                    policyResult={pr}
+                    isMember={isMember}
+                    onBook={handleBook}
+                    booking={bookingByFlightId[flight.id]}
+                    isBooking={bookingFlight === flight.id}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </section>
       )}
 
       {!searched && (
-        <section className="workspace-panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Recent fares</p>
-              <h2>Previously searched routes</h2>
-            </div>
+        <div className="booking-empty-state">
+          <div className="booking-empty-icon">✈</div>
+          <p>Enter a departure and destination city above to search for available flights.</p>
+        </div>
+      )}
+
+      {/* ── My bookings ───────────────────────────────────────────────────── */}
+      <section className="workspace-panel">
+        <div className="section-heading" style={{ marginBottom: 14 }}>
+          <div>
+            <p className="eyebrow">{isAdmin ? "All bookings" : "My bookings"}</p>
+            <h2>Flight bookings</h2>
           </div>
-          <div className="flight-list">
-            {ALL_FARES.slice(0, 3).map((fare) => (
-              <article className="flight-row" key={fare.id}>
-                <div>
-                  <strong>{fare.route}</strong>
-                  <span>{fare.cabin}</span>
-                </div>
-                <strong>{fare.price}</strong>
-                <em className={POLICY_CLASS[fare.policyStatus]}>
-                  {POLICY_LABEL[fare.policyStatus]}
-                </em>
-                <button className="button button-secondary" type="button">
-                  Select
-                </button>
-              </article>
+          {confirmedBookings.length > 0 && (
+            <span className="flight-count-badge">{confirmedBookings.length} confirmed</span>
+          )}
+        </div>
+
+        {bookingsLoading && (
+          <div className="flights-skeleton">
+            {[1, 2].map((i) => (
+              <div key={i} className="flight-card-skeleton" aria-hidden="true">
+                <div className="skeleton-block" style={{ height: 16, width: "50%", marginBottom: 8 }} />
+                <div className="skeleton-block" style={{ height: 12, width: "70%" }} />
+              </div>
             ))}
           </div>
-        </section>
-      )}
+        )}
+
+        {!bookingsLoading && bookings.length === 0 && (
+          <p className="empty-state-text">No bookings yet. Search for flights above to make your first booking.</p>
+        )}
+
+        {!bookingsLoading && confirmedBookings.length > 0 && (
+          <div className="booking-list">
+            {confirmedBookings.map((b) => (
+              <BookingRow
+                key={b.id}
+                booking={b}
+                onCancel={handleCancel}
+                isCancelling={cancellingId === b.id}
+                isAdmin={isAdmin}
+              />
+            ))}
+          </div>
+        )}
+
+        {!bookingsLoading && cancelledBookings.length > 0 && (
+          <>
+            <p className="bookings-section-label">Past / cancelled</p>
+            <div className="booking-list booking-list--muted">
+              {cancelledBookings.map((b) => (
+                <BookingRow
+                  key={b.id}
+                  booking={b}
+                  onCancel={handleCancel}
+                  isCancelling={cancellingId === b.id}
+                  isAdmin={isAdmin}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </section>
     </WorkspaceShell>
   );
 }

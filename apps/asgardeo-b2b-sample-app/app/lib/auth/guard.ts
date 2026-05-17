@@ -5,6 +5,7 @@ export interface TokenClaims {
   orgId: string;
   scopes: string[];
   sub: string;
+  roles: string[];
 }
 
 const baseUrl = (process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL ?? "").replace(/\/$/, "");
@@ -39,8 +40,14 @@ export async function requireAuth(
 
     const scopes = typeof payload.scope === "string" ? payload.scope.split(" ") : [];
     const sub = typeof payload.sub === "string" ? payload.sub : "";
+    const rawRoles = payload.roles;
+    const roles = Array.isArray(rawRoles)
+      ? (rawRoles as unknown[]).map(String)
+      : typeof rawRoles === "string" && rawRoles.length > 0
+      ? [rawRoles]
+      : [];
 
-    return { claims: { orgId, scopes, sub } };
+    return { claims: { orgId, scopes, sub, roles } };
   } catch {
     return NextResponse.json({ error: "Invalid or expired token." }, { status: 401 });
   }

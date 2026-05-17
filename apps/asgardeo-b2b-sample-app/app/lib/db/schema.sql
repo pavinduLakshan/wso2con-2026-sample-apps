@@ -1,3 +1,36 @@
+CREATE TABLE IF NOT EXISTS flights (
+  id             TEXT    PRIMARY KEY,
+  from_city      TEXT    NOT NULL,
+  to_city        TEXT    NOT NULL,
+  airline        TEXT    NOT NULL,
+  departure_time TEXT    NOT NULL,
+  arrival_time   TEXT    NOT NULL,
+  duration       TEXT    NOT NULL,
+  stops          INTEGER NOT NULL DEFAULT 0,
+  price          REAL    NOT NULL,
+  currency       TEXT    NOT NULL DEFAULT 'USD',
+  cabin          TEXT    NOT NULL DEFAULT 'Economy',
+  dates          TEXT    NOT NULL,
+  tags           TEXT    NOT NULL DEFAULT '[]',
+  created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS org_bookings (
+  id                  TEXT    PRIMARY KEY,
+  org_id              TEXT    NOT NULL,
+  booking_reference   TEXT    NOT NULL,
+  booked_for_user_id  TEXT,
+  booked_for_name     TEXT,
+  booked_by_sub       TEXT    NOT NULL,
+  booked_by_name      TEXT    NOT NULL,
+  flight_id           TEXT    NOT NULL,
+  travelers           INTEGER NOT NULL DEFAULT 1,
+  booking_price       REAL,
+  status              TEXT    NOT NULL DEFAULT 'confirmed',
+  created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (flight_id) REFERENCES flights(id)
+);
+
 CREATE TABLE IF NOT EXISTS travel_policies (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,
   org_id            TEXT    NOT NULL UNIQUE,
