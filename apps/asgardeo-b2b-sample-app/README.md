@@ -22,6 +22,12 @@ cp .env.example .env.local
 npm run dev
 ```
 
+If you don't need hot reload, use the production build instead — it's faster than the dev build:
+
+```bash
+npm run build && npm run start
+```
+
 4. Open `http://localhost:3000`.
 
 ## AI Agent
