@@ -12,6 +12,7 @@ interface LoadingScreenProps {
   title?: string;
   description?: string;
   error?: string;
+  action?: { label: string; onClick: () => void };
 }
 
 function StepIcon({ status }: { status: StepStatus }) {
@@ -45,26 +46,28 @@ function StepIcon({ status }: { status: StepStatus }) {
   );
 }
 
-export default function LoadingScreen({ steps, title = "Setting things up…", description, error }: LoadingScreenProps) {
+export default function LoadingScreen({ steps, title = "Setting things up…", description, error, action }: LoadingScreenProps) {
   return (
     <div className="loading-overlay" role="status" aria-live="polite">
       <div className="loading-card">
-        <div className="loading-spinner-wrap" aria-hidden="true">
-          <svg className="loading-ring" fill="none" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="28" cy="28" r="24" stroke="currentColor" strokeOpacity="0.1" strokeWidth="4" />
-            <circle
-              className="loading-ring-arc"
-              cx="28"
-              cy="28"
-              r="24"
-              stroke="currentColor"
-              strokeDasharray="80 72"
-              strokeDashoffset="0"
-              strokeLinecap="round"
-              strokeWidth="4"
-            />
-          </svg>
-        </div>
+        {!error && (
+          <div className="loading-spinner-wrap" aria-hidden="true">
+            <svg className="loading-ring" fill="none" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="28" cy="28" r="24" stroke="currentColor" strokeOpacity="0.1" strokeWidth="4" />
+              <circle
+                className="loading-ring-arc"
+                cx="28"
+                cy="28"
+                r="24"
+                stroke="currentColor"
+                strokeDasharray="80 72"
+                strokeDashoffset="0"
+                strokeLinecap="round"
+                strokeWidth="4"
+              />
+            </svg>
+          </div>
+        )}
 
         <h2 className="loading-title">{title}</h2>
         {description && <p className="loading-description">{description}</p>}
@@ -90,6 +93,11 @@ export default function LoadingScreen({ steps, title = "Setting things up…", d
             </svg>
             {error}
           </div>
+        )}
+        {action && (
+          <button className="button button-secondary" type="button" style={{ marginTop: "16px" }} onClick={action.onClick}>
+            {action.label}
+          </button>
         )}
       </div>
     </div>

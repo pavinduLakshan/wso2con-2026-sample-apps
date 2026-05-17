@@ -58,7 +58,7 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 export default function OrganizationDashboard({ roles }: { roles: UserRole[] }) {
-  const { accessToken } = useAuth();
+  const { accessToken, startImpersonation } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("users");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [usersLoading, setUsersLoading] = useState(true);
@@ -197,9 +197,8 @@ export default function OrganizationDashboard({ roles }: { roles: UserRole[] }) 
   }
 
   function handleImpersonate(user: Employee) {
-    localStorage.setItem("wayfinder.impersonating", user.name);
-    window.dispatchEvent(new Event("wayfinder:impersonation"));
     setEditUser(null);
+    startImpersonation(user.id, user.name);
   }
 
   function openAssignRole(roleName: RoleName) {

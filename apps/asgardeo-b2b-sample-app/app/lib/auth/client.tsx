@@ -16,9 +16,13 @@ interface AuthState {
   accessToken: string | null;
   idToken: string | null;
   user: AppUser | null;
+  isImpersonating: boolean;
+  impersonatedUserName: string | null;
   signIn: (options?: SignInOptions) => void;
   signOut: () => void;
   switchOrganization: (org: { name?: string; orgId?: string }) => void;
+  startImpersonation: (userId: string, userName: string) => void;
+  stopImpersonation: () => void;
 }
 
 const AuthContext = createContext<AuthState>({
@@ -27,9 +31,13 @@ const AuthContext = createContext<AuthState>({
   accessToken: null,
   idToken: null,
   user: null,
+  isImpersonating: false,
+  impersonatedUserName: null,
   signIn: () => {},
   signOut: () => {},
-  switchOrganization: () => {}
+  switchOrganization: () => {},
+  startImpersonation: () => {},
+  stopImpersonation: () => {},
 });
 
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
@@ -87,15 +95,43 @@ function buildAuthorizeUrl(options?: SignInOptions): string {
   return `${baseUrl}/oauth2/authorize?${params.toString()}`;
 }
 
+function buildImpersonateAuthorizeUrl(userId: string, orgId?: string): string {
+  const baseUrl = process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL ?? "";
+  const clientId = process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID ?? "";
+  const redirectUri = process.env.NEXT_PUBLIC_ASGARDEO_AFTER_SIGN_IN_URL ?? window.location.origin;
+  const configuredScopes = process.env.NEXT_PUBLIC_ASGARDEO_SCOPES ?? "openid";
+  const nonce = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+
+  const scopeSet = new Set(["internal_org_user_impersonate", ...configuredScopes.split(" ").filter(Boolean)]);
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "id_token subject_token",
+    scope: [...scopeSet].join(" "),
+    requested_subject: userId,
+    state: "impersonating",
+    nonce,
+    fidp: "OrganizationSSO",
+    orgId: orgId ?? "",
+  });
+
+  return `${baseUrl}/oauth2/authorize?${params.toString()}`;
+}
+
 export function AuthProvider({ children, initialIsExchanging = false }: { children: ReactNode; initialIsExchanging?: boolean }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [idToken, setIdToken] = useState<string | null>(null);
+  const [impersonationToken, setImpersonationToken] = useState<string | null>(null);
+  const [impersonatedUserName, setImpersonatedUserName] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [isExchanging, setIsExchanging] = useState(initialIsExchanging);
   const [exchangeError, setExchangeError] = useState<string | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isOrgRedirecting, setIsOrgRedirecting] = useState(false);
+  const [isStartingImpersonation, setIsStartingImpersonation] = useState(false);
+  const [impersonationError, setImpersonationError] = useState<string | null>(null);
   const exchangingRef = useRef(false);
   const expiryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -107,8 +143,12 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
 
     localStorage.removeItem("access_token");
     localStorage.removeItem("id_token");
+    localStorage.removeItem("impersonation_token");
+    localStorage.removeItem("wayfinder.impersonating_name");
     setAccessToken(null);
     setIdToken(null);
+    setImpersonationToken(null);
+    setImpersonatedUserName(null);
 
     if (orgId) {
       const afterSignInUrl = process.env.NEXT_PUBLIC_ASGARDEO_AFTER_SIGN_IN_URL ?? window.location.origin;
@@ -135,14 +175,26 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
   useEffect(() => {
     const storedAccess = localStorage.getItem("access_token");
     const storedId = localStorage.getItem("id_token");
+    const storedImpersonation = localStorage.getItem("impersonation_token");
+    const storedImpersonatedName = localStorage.getItem("wayfinder.impersonating_name");
 
     if (storedAccess && !isTokenExpired(storedAccess)) {
       setAccessToken(storedAccess);
       if (storedId) setIdToken(storedId);
       scheduleExpiryCheck(storedAccess);
+
+      if (storedImpersonation && !isTokenExpired(storedImpersonation)) {
+        setImpersonationToken(storedImpersonation);
+        setImpersonatedUserName(storedImpersonatedName);
+      } else if (storedImpersonation) {
+        localStorage.removeItem("impersonation_token");
+        localStorage.removeItem("wayfinder.impersonating_name");
+      }
     } else if (storedAccess) {
       localStorage.removeItem("access_token");
       localStorage.removeItem("id_token");
+      localStorage.removeItem("impersonation_token");
+      localStorage.removeItem("wayfinder.impersonating_name");
     }
     setInitialized(true);
   }, [scheduleExpiryCheck]);
@@ -158,6 +210,7 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
     }
   }, [scheduleExpiryCheck]);
 
+  // Handle authorization code callback (regular sign-in)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
@@ -196,6 +249,80 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
       });
   }, [storeToken]);
 
+  // Handle impersonation subject_token callback
+  useEffect(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    const fragmentParams = new URLSearchParams(window.location.hash.slice(1));
+    const fromFragment = fragmentParams.has("subject_token");
+    const params = fromFragment ? fragmentParams : queryParams;
+
+    const subjectToken = params.get("subject_token");
+    const state = params.get("state");
+
+    if (!subjectToken || state !== "impersonating" || exchangingRef.current) {
+      return;
+    }
+
+    setIsExchanging(true);
+    exchangingRef.current = true;
+
+    const callbackIdToken = params.get("id_token");
+
+    const url = new URL(window.location.href);
+    if (fromFragment) {
+      fragmentParams.delete("subject_token");
+      fragmentParams.delete("id_token");
+      fragmentParams.delete("session_state");
+      fragmentParams.delete("state");
+      fragmentParams.delete("nonce");
+      const remaining = fragmentParams.toString();
+      url.hash = remaining ? `#${remaining}` : "";
+    } else {
+      url.searchParams.delete("subject_token");
+      url.searchParams.delete("id_token");
+      url.searchParams.delete("session_state");
+      url.searchParams.delete("state");
+      url.searchParams.delete("nonce");
+    }
+    window.history.replaceState({}, "", url.toString());
+
+    const actorToken = callbackIdToken ?? localStorage.getItem("id_token");
+    const pendingName = localStorage.getItem("wayfinder.impersonate_pending_name");
+
+    fetch("/api/auth/impersonate", {
+      body: JSON.stringify({ subject_token: subjectToken, actor_token: actorToken }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    })
+      .then((res) => res.json())
+      .then((data: { access_token?: string; error?: string }) => {
+        if (data.access_token) {
+          const name = pendingName ?? "Unknown user";
+          localStorage.setItem("impersonation_token", data.access_token);
+          localStorage.setItem("wayfinder.impersonating_name", name);
+          localStorage.removeItem("wayfinder.impersonate_pending_id");
+          localStorage.removeItem("wayfinder.impersonate_pending_name");
+          setImpersonationToken(data.access_token);
+          setImpersonatedUserName(name);
+          setIsExchanging(false);
+        } else {
+          localStorage.removeItem("wayfinder.impersonate_pending_id");
+          localStorage.removeItem("wayfinder.impersonate_pending_name");
+          setIsExchanging(false);
+          setImpersonationError(data.error ?? "Impersonation failed. Please try again.");
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem("wayfinder.impersonate_pending_id");
+        localStorage.removeItem("wayfinder.impersonate_pending_name");
+        setIsExchanging(false);
+        setImpersonationError("Impersonation failed. Please try again.");
+      })
+      .finally(() => {
+        exchangingRef.current = false;
+      });
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const orgId = params.get("orgId");
@@ -227,8 +354,14 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
     const currentIdToken = idToken;
     localStorage.removeItem("access_token");
     localStorage.removeItem("id_token");
+    localStorage.removeItem("impersonation_token");
+    localStorage.removeItem("wayfinder.impersonating_name");
+    localStorage.removeItem("wayfinder.impersonate_pending_id");
+    localStorage.removeItem("wayfinder.impersonate_pending_name");
     setAccessToken(null);
     setIdToken(null);
+    setImpersonationToken(null);
+    setImpersonatedUserName(null);
 
     const baseUrl = process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL ?? "";
     const clientId = process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID ?? "";
@@ -261,11 +394,39 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
   const switchOrganization = useCallback((org: { name?: string; orgId?: string }) => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("id_token");
+    localStorage.removeItem("impersonation_token");
+    localStorage.removeItem("wayfinder.impersonating_name");
     setAccessToken(null);
     setIdToken(null);
+    setImpersonationToken(null);
+    setImpersonatedUserName(null);
     window.location.href = buildAuthorizeUrl({ fidp: "OrganizationSSO", org: org.name, orgId: org.orgId });
   }, []);
 
+  const startImpersonation = useCallback((userId: string, userName: string) => {
+    const storedIdToken = localStorage.getItem("id_token");
+    if (!storedIdToken) {
+      console.error("[impersonation] No id_token available to use as actor_token.");
+      return;
+    }
+    const storedAccessToken = localStorage.getItem("access_token");
+    const orgId = storedAccessToken
+      ? (decodeJwtPayload(storedAccessToken)?.org_id as string | undefined)
+      : undefined;
+    localStorage.setItem("wayfinder.impersonate_pending_id", userId);
+    localStorage.setItem("wayfinder.impersonate_pending_name", userName);
+    setIsStartingImpersonation(true);
+    window.location.href = buildImpersonateAuthorizeUrl(userId, orgId);
+  }, []);
+
+  const stopImpersonation = useCallback(() => {
+    localStorage.removeItem("impersonation_token");
+    localStorage.removeItem("wayfinder.impersonating_name");
+    setImpersonationToken(null);
+    setImpersonatedUserName(null);
+  }, []);
+
+  // user is always derived from the admin's own tokens, not the impersonation token
   const user = (() => {
     if (!accessToken) return null;
     const accessPayload = decodeJwtPayload(accessToken);
@@ -277,13 +438,18 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
   return (
     <AuthContext.Provider
       value={{
-        accessToken,
+        // When impersonating, expose impersonation token as accessToken so all API calls use it
+        accessToken: impersonationToken ?? accessToken,
         idToken,
         isLoading: !initialized || isExchanging,
         isSignedIn: !!accessToken,
+        isImpersonating: !!impersonationToken,
+        impersonatedUserName,
         signIn,
         signOut,
         switchOrganization,
+        startImpersonation,
+        stopImpersonation,
         user
       }}
     >
@@ -293,6 +459,27 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
           description="You will be redirected to the identity provider shortly."
           steps={[]}
           title="Redirecting…"
+        />
+      )}
+      {isStartingImpersonation && (
+        <LoadingScreen
+          description="Please wait while we set up the impersonation session."
+          steps={[]}
+          title="Starting impersonation…"
+        />
+      )}
+      {impersonationError && (
+        <LoadingScreen
+          action={{
+            label: "Back to users",
+            onClick: () => {
+              setImpersonationError(null);
+              window.location.href = "/organization";
+            },
+          }}
+          error={impersonationError}
+          steps={[]}
+          title="Impersonation failed"
         />
       )}
       {isSigningOut && (

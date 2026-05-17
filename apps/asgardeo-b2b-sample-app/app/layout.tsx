@@ -32,11 +32,12 @@ export default async function RootLayout({
   const urlParams = new URLSearchParams(url.split("?")[1] ?? "");
   const hasCode = urlParams.has("code");
   const hasOrgId = urlParams.has("orgId");
+  const hasSubjectToken = urlParams.has("subject_token") && urlParams.get("state") === "impersonating";
 
   return (
     <html lang="en" className={inter.className}>
       <body>
-        <AuthProvider initialIsExchanging={hasCode || hasOrgId}>
+        <AuthProvider initialIsExchanging={hasCode || hasOrgId || hasSubjectToken}>
           <BrandingProvider>
             {children}
           </BrandingProvider>
