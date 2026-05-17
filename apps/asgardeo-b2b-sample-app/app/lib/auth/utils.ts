@@ -27,6 +27,9 @@ export enum Scope {
   BRANDING_CREATE_BASIC = "create_basic_branding",
   BRANDING_CREATE_ADVANCED = "create_advanced_branding",
   BRANDING_DELETE = "delete_branding",
+  BOOKING_VIEW = "view_booking",
+  BOOKING_CREATE = "create_booking",
+  BOOKING_DELETE = "delete_booking",
 }
 
 export enum UserRole {

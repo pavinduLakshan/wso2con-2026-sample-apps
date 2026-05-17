@@ -1150,6 +1150,10 @@ strong {
   grid-template-columns: minmax(260px, 0.45fr) minmax(0, 1fr);
 }
 
+.admin-shell .booking-hero {
+  grid-template-columns: 1fr;
+}
+
 .dashboard-grid {
   display: grid;
   gap: 18px;
@@ -3883,5 +3887,458 @@ select.form-field-input {
 
   .agent-chat-composer {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ── Flight Booking ─────────────────────────────────────────── */
+
+.booking-policy-banner {
+  align-items: flex-start;
+  background: var(--app-primary-soft);
+  border: 1px solid var(--app-primary-soft-border);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+}
+
+.booking-policy-banner .policy-banner-icon {
+  flex: 0 0 auto;
+  font-size: 1.2rem;
+  line-height: 1.4;
+}
+
+.booking-policy-banner strong {
+  color: var(--app-ink);
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.booking-policy-banner span {
+  color: var(--app-muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.booking-policy-banner b {
+  color: var(--app-ink);
+  font-weight: 750;
+}
+
+.booking-search-form {
+  display: grid;
+  gap: 12px;
+}
+
+.booking-search-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.booking-search-label {
+  color: var(--app-muted);
+  display: grid;
+  font-size: 0.82rem;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.booking-search-input {
+  background: #f8fafc;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  color: var(--app-ink);
+  font: inherit;
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+.booking-search-input:focus {
+  border-color: var(--app-primary);
+  outline: 3px solid rgba(29, 78, 216, 0.12);
+}
+
+select.booking-search-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6l4 4 4-4' stroke='%235f6b7a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  cursor: pointer;
+  padding-right: 36px;
+}
+
+.flight-count-badge {
+  background: var(--app-primary-soft);
+  border: 1px solid var(--app-primary-soft-border);
+  border-radius: 999px;
+  color: var(--app-primary);
+  font-size: 0.82rem;
+  font-weight: 750;
+  padding: 5px 12px;
+  white-space: nowrap;
+}
+
+.flight-card-list {
+  display: grid;
+  gap: 12px;
+}
+
+.flight-card {
+  background: #ffffff;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  transition: box-shadow 150ms ease;
+}
+
+.flight-card:hover {
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+}
+
+.flight-card--blocked {
+  background: #fafafa;
+  opacity: 0.8;
+}
+
+.flight-card-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.flight-card-route {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.flight-card-city {
+  color: var(--app-ink);
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+
+.flight-card-arrow {
+  color: var(--app-muted);
+  font-size: 0.95rem;
+}
+
+.flight-card-meta {
+  display: grid;
+  gap: 6px;
+}
+
+.flight-card-times {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.flight-time {
+  color: var(--app-ink);
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.flight-duration {
+  background: var(--app-bg);
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  color: var(--app-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 3px 10px;
+}
+
+.flight-card-details {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.flight-airline {
+  color: var(--app-muted);
+  font-size: 0.88rem;
+}
+
+.flight-cabin-tag {
+  background: var(--app-primary-soft);
+  border-radius: 999px;
+  color: var(--app-primary);
+  font-size: 0.76rem;
+  font-weight: 750;
+  padding: 3px 8px;
+}
+
+.flight-nonstop {
+  background: var(--app-success-bg);
+  border-radius: 999px;
+  color: var(--app-success);
+  font-size: 0.76rem;
+  font-weight: 750;
+  padding: 3px 8px;
+}
+
+.flight-stops {
+  background: var(--app-warning-bg);
+  border-radius: 999px;
+  color: var(--app-warning);
+  font-size: 0.76rem;
+  font-weight: 750;
+  padding: 3px 8px;
+}
+
+.flight-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.flight-tag {
+  background: #f1f5f9;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  color: var(--app-muted);
+  font-size: 0.74rem;
+  font-weight: 650;
+  padding: 2px 8px;
+}
+
+.flight-violations {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.violation-item {
+  color: #b45309;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.flight-card-footer {
+  align-items: center;
+  border-top: 1px solid var(--app-border);
+  display: flex;
+  justify-content: space-between;
+  padding-top: 10px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.flight-price {
+  color: var(--app-ink);
+  font-size: 1.35rem;
+  font-weight: 750;
+}
+
+.flight-price-label {
+  color: var(--app-muted);
+  font-size: 0.82rem;
+}
+
+.flight-card-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.flight-dates-small {
+  color: var(--app-muted);
+  font-size: 0.8rem;
+}
+
+.flight-booked-badge {
+  background: var(--app-success-bg);
+  border: 1px solid #a7f3d0;
+  border-radius: 999px;
+  color: var(--app-success);
+  font-size: 0.8rem;
+  font-weight: 750;
+  padding: 6px 12px;
+}
+
+/* ── Policy badges ──────────────────────────────────────────── */
+
+.flight-policy-badge {
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 750;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.flight-policy-badge--ok {
+  background: var(--app-success-bg);
+  color: var(--app-success);
+}
+
+.flight-policy-badge--warn {
+  background: var(--app-warning-bg);
+  color: var(--app-warning);
+}
+
+.flight-policy-badge--bad {
+  background: #fff5f5;
+  color: #b91c1c;
+}
+
+/* ── Skeleton loaders ───────────────────────────────────────── */
+
+.flights-skeleton {
+  display: grid;
+  gap: 12px;
+}
+
+.flight-card-skeleton {
+  background: #f8fafc;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+/* ── Booking rows ───────────────────────────────────────────── */
+
+.booking-list {
+  display: grid;
+  gap: 10px;
+}
+
+.booking-list--muted {
+  opacity: 0.68;
+}
+
+.booking-row {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 14px 16px;
+  flex-wrap: wrap;
+}
+
+.booking-row-info {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.booking-row-route {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.booking-row-route strong {
+  color: var(--app-ink);
+  font-size: 0.95rem;
+}
+
+.booking-ref {
+  color: var(--app-muted);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.booking-row-meta {
+  color: var(--app-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  gap: 4px;
+}
+
+.booking-row-right {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 10px;
+}
+
+.booking-price {
+  color: var(--app-ink);
+  font-size: 1.05rem;
+}
+
+.booking-cancelled-pill {
+  background: #f3f4f6;
+  border-radius: 999px;
+  color: var(--app-muted);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 750;
+  padding: 6px 10px;
+}
+
+.booking-cancel-btn {
+  font-size: 0.84rem;
+  min-height: 34px;
+}
+
+.bookings-section-label {
+  color: var(--app-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin: 16px 0 8px;
+  text-transform: uppercase;
+}
+
+/* ── Booking empty state ────────────────────────────────────── */
+
+.booking-empty-state {
+  align-items: center;
+  border: 2px dashed var(--app-border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.booking-empty-icon {
+  font-size: 2.5rem;
+  opacity: 0.4;
+}
+
+.booking-empty-state p {
+  color: var(--app-muted);
+  margin: 0;
+}
+
+.empty-state-text {
+  color: var(--app-muted);
+  font-size: 0.92rem;
+  padding: 12px 0;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .booking-search-row {
+    grid-template-columns: 1fr;
+  }
+
+  .flight-card-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .booking-row {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
