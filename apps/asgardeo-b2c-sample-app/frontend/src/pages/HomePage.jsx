@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAsgardeo } from "@asgardeo/react";
+import { useQueries } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -12,8 +13,9 @@ import {
   Sparkles,
   Star
 } from "lucide-react";
-import { SearchPanel } from "../components/SearchPanel";
+import { apiQueryKeys, useApiAuth } from "../api-queries";
 import { getFlight } from "../api";
+import { SearchPanel } from "../components/SearchPanel";
 import { ASGARDEO_CLIENT_ID, getCDSProfile } from "../cds-api";
 import { buildFlightDetailsPath } from "../utils/routes";
 
@@ -58,8 +60,8 @@ function LoadingFavorites() {
 
 function QuickBookingsSection({ cdsProfileId }) {
   const navigate = useNavigate();
-  const { getAccessToken } = useAsgardeo();
-  const [favoriteFlights, setFavoriteFlights] = useState([]);
+  const auth = useApiAuth();
+  const [favoriteFlightIds, setFavoriteFlightIds] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -69,7 +71,7 @@ function QuickBookingsSection({ cdsProfileId }) {
     async function loadFavorites() {
       if (!cdsProfileId) {
         if (isCurrent) {
-          setFavoriteFlights([]);
+          setFavoriteFlightIds([]);
           setIsLoading(false);
         }
         return;
@@ -82,29 +84,12 @@ function QuickBookingsSection({ cdsProfileId }) {
         const profile = await getCDSProfile(cdsProfileId);
         const favoriteIds = extractFavoriteFlightIds(profile);
 
-        if (favoriteIds.length === 0) {
-          if (isCurrent) {
-            setFavoriteFlights([]);
-          }
-          return;
-        }
-
-        const flights = await Promise.all(
-          favoriteIds.map(async (id) => {
-            try {
-              return await getFlight(id);
-            } catch {
-              return null;
-            }
-          })
-        );
-
         if (isCurrent) {
-          setFavoriteFlights(flights.filter(Boolean));
+          setFavoriteFlightIds(favoriteIds);
         }
       } catch (requestError) {
         if (isCurrent) {
-          setFavoriteFlights([]);
+          setFavoriteFlightIds([]);
           setError(requestError.message);
         }
       } finally {
@@ -120,6 +105,19 @@ function QuickBookingsSection({ cdsProfileId }) {
       isCurrent = false;
     };
   }, [cdsProfileId]);
+
+  const favoriteFlightQueries = useQueries({
+    queries: favoriteFlightIds.map((id) => ({
+      queryKey: apiQueryKeys.flight(id, auth.userKey),
+      queryFn: () => getFlight(id, auth),
+      enabled: auth.isSignedIn && !auth.isLoading,
+      retry: false
+    }))
+  });
+  const isFavoriteFlightLoading = favoriteFlightQueries.some((query) => query.isLoading);
+  const favoriteFlights = favoriteFlightQueries
+    .map((query) => query.data)
+    .filter(Boolean);
 
   function handleBooking(itemId) {
     setError("");
@@ -141,7 +139,7 @@ function QuickBookingsSection({ cdsProfileId }) {
         </div>
       )}
 
-      {isLoading ? (
+      {isLoading || isFavoriteFlightLoading ? (
         <LoadingFavorites />
       ) : favoriteFlights.length === 0 ? (
         <p className="empty-state">No favorite flights found yet. Mark favorites in search results.</p>

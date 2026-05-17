@@ -1,57 +1,16 @@
-import { useEffect, useRef, useState } from "react";
 import { useAsgardeo } from "@asgardeo/react";
 import { Link } from "react-router-dom";
-import { getBookedFlights } from "../api";
+import { useApiAuth, useBookedFlightsQuery } from "../api-queries";
 import { createSignInConfigWithCDSTracker } from "../cds-api";
 import { formatPrice, getBookingReference } from "../utils/bookings";
 
 export function BookingsPageWithAuth() {
-  const { getAccessToken, isSignedIn, signIn, user } = useAsgardeo();
-  const [bookings, setBookings] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const userKey = user?.sub || user?.username || user?.userName || user?.email || "signed-in";
-  const getAccessTokenRef = useRef(getAccessToken);
-
-  useEffect(() => {
-    getAccessTokenRef.current = getAccessToken;
-  }, [getAccessToken]);
-
-  useEffect(() => {
-    let isCurrent = true;
-
-    async function loadBookings() {
-      if (!isSignedIn) {
-        return;
-      }
-
-      setIsLoading(true);
-      setError("");
-
-      try {
-        const accessToken = getAccessTokenRef.current ? await getAccessTokenRef.current() : null;
-        const data = await getBookedFlights(accessToken, user);
-
-        if (isCurrent) {
-          setBookings(data);
-        }
-      } catch (requestError) {
-        if (isCurrent) {
-          setError(requestError.message);
-        }
-      } finally {
-        if (isCurrent) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    loadBookings();
-
-    return () => {
-      isCurrent = false;
-    };
-  }, [isSignedIn, userKey]);
+  const { isSignedIn, signIn } = useAsgardeo();
+  const auth = useApiAuth();
+  const bookingsQuery = useBookedFlightsQuery({ auth });
+  const bookings = bookingsQuery.data || [];
+  const isLoading = bookingsQuery.isLoading;
+  const error = bookingsQuery.error?.message || "";
 
   if (!isSignedIn) {
     return (

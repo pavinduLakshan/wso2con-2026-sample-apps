@@ -1,15 +1,13 @@
 import { useEffect, useState } from "react";
-import { useAsgardeo } from "@asgardeo/react";
 import { Heart, Plane } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { SearchPanel } from "../components/SearchPanel";
 import {
-  createBooking,
-  getBookedFlights,
-  getFlights,
-  getHotels,
-  getTrips
-} from "../api";
+  useApiAuth,
+  useBookedFlightsQuery,
+  useCreateBookingMutation,
+  useSearchResultsQuery
+} from "../api-queries";
+import { SearchPanel } from "../components/SearchPanel";
 import { ASGARDEO_CLIENT_ID, getCDSProfile, updateCDSProfile } from "../cds-api";
 import { formatPrice, isSameFlight } from "../utils/bookings";
 import { buildFlightDetailsPath } from "../utils/routes";
@@ -136,14 +134,28 @@ function ResultCard({ bookingState, category, isFavorite, item, onBook, onSelect
   );
 }
 
-export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations, onSearch, user }) {
+export function ResultsPage({
+  auth,
+  cdsProfileId,
+  criteria,
+  includeBookings = false,
+  locations,
+  onSearch
+}) {
   const navigate = useNavigate();
-  const [results, setResults] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isFavoriteResultLoading, setIsFavoriteResultLoading] = useState(false);
   const [error, setError] = useState("");
   const [bookingStates, setBookingStates] = useState({});
   const [favorites, setFavorites] = useState(() => new Set());
+  const resultsQuery = useSearchResultsQuery(criteria, { auth });
+  const bookedFlightsQuery = useBookedFlightsQuery({
+    auth,
+    enabled: includeBookings && criteria.category === "flights"
+  });
+  const createBookingMutation = useCreateBookingMutation(auth);
+  const results = resultsQuery.data || [];
+  const isLoading = resultsQuery.isLoading;
+  const requestError = error || resultsQuery.error?.message || "";
 
   useEffect(() => {
     let isCurrent = true;
@@ -183,67 +195,25 @@ export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations,
   }, [cdsProfileId, criteria.category]);
 
   useEffect(() => {
-    let isCurrent = true;
+    setError("");
+    setBookingStates({});
+  }, [criteria]);
 
-    async function loadResults() {
-      setIsLoading(true);
-      setError("");
-      setBookingStates({});
+  useEffect(() => {
+    if (criteria.category !== "flights" || !includeBookings || !bookedFlightsQuery.data) {
+      return;
+    }
 
-      try {
-        let data;
+    const nextBookingStates = {};
 
-        if (criteria.category === "hotels") {
-          data = await getHotels({ location: criteria.to });
-        } else if (criteria.category === "trips") {
-          data = await getTrips({ destination: criteria.to });
-        } else {
-          data = await getFlights({
-            from: criteria.from,
-            to: criteria.to
-          });
-        }
-
-        if (isCurrent) {
-          setResults(data);
-
-          if (criteria.category === "flights" && getAccessToken) {
-            try {
-              const accessToken = await getAccessToken();
-              const bookedFlights = await getBookedFlights(accessToken, user);
-              const nextBookingStates = {};
-
-              for (const result of data) {
-                if (bookedFlights.some((booking) => isSameFlight(result, booking.flight))) {
-                  nextBookingStates[result.id] = "confirmed";
-                }
-              }
-
-              if (isCurrent) {
-                setBookingStates(nextBookingStates);
-              }
-            } catch {
-              // Results should remain usable even if existing bookings cannot be checked.
-            }
-          }
-        }
-      } catch (requestError) {
-        if (isCurrent) {
-          setError(requestError.message);
-        }
-      } finally {
-        if (isCurrent) {
-          setIsLoading(false);
-        }
+    for (const result of results) {
+      if (bookedFlightsQuery.data.some((booking) => isSameFlight(result, booking.flight))) {
+        nextBookingStates[result.id] = "confirmed";
       }
     }
 
-    loadResults();
-
-    return () => {
-      isCurrent = false;
-    };
-  }, [criteria, getAccessToken]);
+    setBookingStates(nextBookingStates);
+  }, [bookedFlightsQuery.data, criteria.category, includeBookings, results]);
 
   async function handleBooking(type, itemId) {
     setError("");
@@ -253,13 +223,11 @@ export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations,
     }));
 
     try {
-      const accessToken = getAccessToken ? await getAccessToken() : null;
-
-      await createBooking({
+      await createBookingMutation.mutateAsync({
         type,
         itemId,
         travelers: Number.parseInt(criteria.travelers, 10) || 1
-      }, accessToken, user);
+      });
 
       setBookingStates((current) => ({
         ...current,
@@ -330,14 +298,14 @@ export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations,
         />
       </section>
 
-      {error && (
+      {requestError && (
         <div className="api-status api-status--error" role="status">
-          {error}
+          {requestError}
         </div>
       )}
 
       <section className="results-section" aria-label="Search results">
-        {(isLoading || isFavoriteResultLoading) && <LoadingResults />}
+        {(isLoading || isFavoriteResultLoading || bookedFlightsQuery.isLoading) && <LoadingResults />}
         {!isLoading && !isFavoriteResultLoading && results.length === 0 && (
           <p className="empty-state">No results matched this search.</p>
         )}
@@ -360,7 +328,7 @@ export function ResultsPage({ cdsProfileId, criteria, getAccessToken, locations,
 }
 
 export function ResultsPageWithAuth(props) {
-  const { getAccessToken, user } = useAsgardeo();
+  const auth = useApiAuth();
 
-  return <ResultsPage {...props} getAccessToken={getAccessToken} user={user} />;
+  return <ResultsPage {...props} auth={auth} includeBookings />;
 }

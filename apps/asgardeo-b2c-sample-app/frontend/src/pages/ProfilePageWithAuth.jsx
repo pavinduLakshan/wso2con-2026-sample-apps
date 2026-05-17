@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
 import { useAsgardeo } from "@asgardeo/react";
 import { CircleUserRound, Pencil, Save, ShieldCheck, X } from "lucide-react";
-import { getProfile, updateProfile } from "../api";
+import { useApiAuth, useProfileQuery, useUpdateProfileMutation } from "../api-queries";
 import { createSignInConfigWithCDSTracker } from "../cds-api";
 
 const walletCredentialOffer = import.meta.env.VITE_WALLET_CREDENTIAL_OFFER || "";
-const profileRequestCache = new Map();
-const profileRequestInFlight = new Map();
 
 function getUserValue(user, keys) {
   for (const key of keys) {
@@ -91,7 +89,10 @@ function formatMemberSince(value) {
 }
 
 export function ProfilePageWithAuth() {
-  const { getAccessToken, isSignedIn, signIn, user } = useAsgardeo();
+  const { isSignedIn, signIn, user } = useAsgardeo();
+  const auth = useApiAuth();
+  const profileQuery = useProfileQuery({ auth });
+  const updateProfileMutation = useUpdateProfileMutation(auth);
   const claimFirstName = getUserValue(user, ["name.givenName", "given_name", "givenName"]);
   const claimLastName = getUserValue(user, ["name.familyName", "family_name", "familyName"]);
   const claimEmail = getUserEmail(user);
@@ -113,9 +114,9 @@ export function ProfilePageWithAuth() {
   });
   const [draftProfile, setDraftProfile] = useState(profile);
   const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const isSaving = updateProfileMutation.isPending;
   const firstName = profile.firstName;
   const lastName = profile.lastName;
   const email = profile.email;
@@ -127,7 +128,6 @@ export function ProfilePageWithAuth() {
       return;
     }
 
-    let isActive = true;
     const claimProfile = {
       firstName: claimFirstName || "",
       lastName: claimLastName || "",
@@ -137,73 +137,29 @@ export function ProfilePageWithAuth() {
 
     setProfile(claimProfile);
     setDraftProfile(claimProfile);
+  }, [claimFirstName, claimLastName, claimEmail, createdDate, isSignedIn, profileLoadKey]);
 
-    if (profileRequestCache.has(profileLoadKey)) {
-      const cachedProfile = profileRequestCache.get(profileLoadKey);
-
-      if (cachedProfile?.email && cachedProfile?.memberSince) {
-        setProfile(cachedProfile);
-        setDraftProfile(cachedProfile);
-        return;
-      }
-
-      profileRequestCache.delete(profileLoadKey);
+  useEffect(() => {
+    if (!profileQuery.data) {
+      return;
     }
 
-    async function loadAsgardeoProfile() {
-      try {
-        const profileRequest = profileRequestInFlight.get(profileLoadKey) || (async () => {
-          let lastProfile = null;
-
-          for (let attempt = 0; attempt < 3; attempt += 1) {
-            const accessToken = await getAccessToken();
-            const currentProfile = await getProfile(accessToken, user);
-            lastProfile = currentProfile;
-
-            if (getProfileEmail(currentProfile) && currentProfile.memberSince) {
-              return currentProfile;
-            }
-
-            await new Promise((resolve) => window.setTimeout(resolve, 500));
-          }
-
-          return lastProfile;
-        })();
-
-        profileRequestInFlight.set(profileLoadKey, profileRequest);
-
-        const savedProfile = await profileRequest;
-
-        if (!isActive) {
-          return;
-        }
-
-        const nextProfile = {
-          firstName: savedProfile.firstName || claimProfile.firstName,
-          lastName: savedProfile.lastName || claimProfile.lastName,
-          email: getProfileEmail(savedProfile) || claimProfile.email,
-          memberSince: savedProfile.memberSince || claimProfile.memberSince
-        };
-
-        if (nextProfile.email && nextProfile.memberSince) {
-          profileRequestCache.set(profileLoadKey, nextProfile);
-        }
-
-        setProfile(nextProfile);
-        setDraftProfile(nextProfile);
-      } catch (error) {
-        console.warn("Unable to load Asgardeo profile:", error);
-      } finally {
-        profileRequestInFlight.delete(profileLoadKey);
-      }
-    }
-
-    loadAsgardeoProfile();
-
-    return () => {
-      isActive = false;
+    const nextProfile = {
+      firstName: profileQuery.data.firstName || claimFirstName || "",
+      lastName: profileQuery.data.lastName || claimLastName || "",
+      email: getProfileEmail(profileQuery.data) || claimEmail || "",
+      memberSince: profileQuery.data.memberSince || createdDate || ""
     };
-  }, [claimFirstName, claimLastName, claimEmail, createdDate, getAccessToken, isSignedIn, profileLoadKey]);
+
+    setProfile(nextProfile);
+    setDraftProfile(nextProfile);
+  }, [claimEmail, claimFirstName, claimLastName, createdDate, profileQuery.data]);
+
+  useEffect(() => {
+    if (profileQuery.error) {
+      console.warn("Unable to load Asgardeo profile:", profileQuery.error);
+    }
+  }, [profileQuery.error]);
 
   function updateDraftProfile(field, value) {
     setDraftProfile((current) => ({
@@ -235,13 +191,11 @@ export function ProfilePageWithAuth() {
       email: draftProfile.email.trim()
     };
 
-    setIsSaving(true);
     setStatusMessage("");
     setErrorMessage("");
 
     try {
-      const accessToken = await getAccessToken();
-      const savedProfile = await updateProfile(nextProfile, accessToken, user);
+      const savedProfile = await updateProfileMutation.mutateAsync(nextProfile);
       const displayProfile = {
         firstName: savedProfile.firstName || nextProfile.firstName,
         lastName: savedProfile.lastName || nextProfile.lastName,
@@ -251,13 +205,10 @@ export function ProfilePageWithAuth() {
 
       setProfile(displayProfile);
       setDraftProfile(displayProfile);
-      profileRequestCache.set(profileLoadKey, displayProfile);
       setIsEditing(false);
       setStatusMessage("Profile updated in Asgardeo.");
     } catch (error) {
       setErrorMessage(error.message || "Unable to update your profile in Asgardeo.");
-    } finally {
-      setIsSaving(false);
     }
   }
 

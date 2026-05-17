@@ -1,58 +1,33 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useAsgardeo } from "@asgardeo/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, CreditCard, Eye, EyeOff } from "lucide-react";
-import { createBooking, getBookedFlights, getFlight } from "../api";
+import {
+  apiQueryKeys,
+  useApiAuth,
+  useCreateBookingMutation,
+  useFlightQuery
+} from "../api-queries";
+import { getBookedFlights } from "../api";
 import { createSignInConfigWithCDSTracker } from "../cds-api";
 import { formatPrice, isSameFlight } from "../utils/bookings";
 import { buildFlightDetailsPath } from "../utils/routes";
 
 export function PaymentPageWithAuth({ criteria, flightId }) {
   const navigate = useNavigate();
-  const { getAccessToken, isSignedIn, signIn, user } = useAsgardeo();
-  const [flight, setFlight] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { isSignedIn, signIn, user } = useAsgardeo();
+  const auth = useApiAuth();
+  const flightQuery = useFlightQuery(flightId, { auth });
+  const createBookingMutation = useCreateBookingMutation(auth);
+  const flight = flightQuery.data;
+  const isLoading = flightQuery.isLoading;
   const [paymentState, setPaymentState] = useState("idle");
   const [isCvcVisible, setIsCvcVisible] = useState(false);
-  const [error, setError] = useState("");
-  const userKey = user?.sub || user?.username || user?.userName || user?.email || "signed-in";
-  const username = user?.username || user?.userName || user?.email || user?.sub || "";
-  const getAccessTokenRef = useRef(getAccessToken);
-
-  useEffect(() => {
-    getAccessTokenRef.current = getAccessToken;
-  }, [getAccessToken]);
-
-  useEffect(() => {
-    let isCurrent = true;
-
-    async function loadFlight() {
-      setIsLoading(true);
-      setError("");
-
-      try {
-        const data = await getFlight(flightId);
-
-        if (isCurrent) {
-          setFlight(data);
-        }
-      } catch (requestError) {
-        if (isCurrent) {
-          setError(requestError.message);
-        }
-      } finally {
-        if (isCurrent) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    loadFlight();
-
-    return () => {
-      isCurrent = false;
-    };
-  }, [flightId, userKey]);
+  const [actionError, setActionError] = useState("");
+  const error = actionError || flightQuery.error?.message || "";
+  const username = user?.userName || user?.username || user?.email || user?.sub || "";
 
   async function handlePayment() {
     if (!flight) {
@@ -60,20 +35,19 @@ export function PaymentPageWithAuth({ criteria, flightId }) {
     }
 
     setPaymentState("paying");
-    setError("");
+    setActionError("");
 
     try {
-      const accessToken = getAccessTokenRef.current ? await getAccessTokenRef.current() : null;
-      const booking = await createBooking({
+      const booking = await createBookingMutation.mutateAsync({
         type: "flight",
         itemId: flight.id,
         travelers: Number.parseInt(criteria.travelers, 10) || 1,
         user: {
-          id: user?.sub,
+          id: username,
           username,
           email: user?.email || user?.mail
         }
-      }, accessToken, user);
+      });
 
       window.dispatchEvent(new CustomEvent("wayfinder:deal-alert-consent", {
         detail: {
@@ -90,8 +64,10 @@ export function PaymentPageWithAuth({ criteria, flightId }) {
     } catch (requestError) {
       try {
         if (requestError.message.includes("already exists")) {
-          const accessToken = getAccessTokenRef.current ? await getAccessTokenRef.current() : null;
-          const bookings = await getBookedFlights(accessToken, user);
+          const bookings = await queryClient.fetchQuery({
+            queryKey: apiQueryKeys.bookedFlights(auth.userKey),
+            queryFn: () => getBookedFlights(auth)
+          });
           const existingBooking = bookings.find((booking) => isSameFlight(flight, booking.flight));
 
           if (existingBooking) {
@@ -104,7 +80,7 @@ export function PaymentPageWithAuth({ criteria, flightId }) {
       }
 
       setPaymentState("idle");
-      setError(requestError.message);
+      setActionError(requestError.message);
     }
   }
 

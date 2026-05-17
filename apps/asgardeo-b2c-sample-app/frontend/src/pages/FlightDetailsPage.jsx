@@ -1,47 +1,16 @@
-import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ChevronLeft, Plane } from "lucide-react";
-import { getFlight } from "../api";
+import { useFlightQuery } from "../api-queries";
 import { formatPrice } from "../utils/bookings";
 import { buildFlightPaymentPath } from "../utils/routes";
 
-export function FlightDetailsPage({ criteria, flightId }) {
+export function FlightDetailsPage({ auth, criteria, flightId }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const [flight, setFlight] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let isCurrent = true;
-
-    async function loadFlight() {
-      setIsLoading(true);
-      setError("");
-
-      try {
-        const data = await getFlight(flightId);
-
-        if (isCurrent) {
-          setFlight(data);
-        }
-      } catch (requestError) {
-        if (isCurrent) {
-          setError(requestError.message);
-        }
-      } finally {
-        if (isCurrent) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    loadFlight();
-
-    return () => {
-      isCurrent = false;
-    };
-  }, [flightId]);
+  const flightQuery = useFlightQuery(flightId, { auth });
+  const flight = flightQuery.data;
+  const isLoading = flightQuery.isLoading;
+  const error = flightQuery.error?.message || "";
 
   return (
     <main className="bookings-page">

@@ -1,86 +1,85 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAsgardeo } from "@asgardeo/react";
 import { Link } from "react-router-dom";
 import { Ban, ChevronLeft, Plane, ShieldCheck } from "lucide-react";
-import { cancelBooking, getBookedFlights } from "../api";
+import { useApiAuth, useBookedFlightsQuery, useCancelBookingMutation } from "../api-queries";
 import { createSignInConfigWithCDSTracker } from "../cds-api";
 import { formatPrice, getBookingReference } from "../utils/bookings";
 
 export function BookingDetailsPageWithAuth({ bookingId }) {
-  const { getAccessToken, isSignedIn, signIn, user } = useAsgardeo();
+  const { isSignedIn, signIn } = useAsgardeo();
+  const auth = useApiAuth();
+  const bookingsQuery = useBookedFlightsQuery({ auth });
+  const cancelBookingMutation = useCancelBookingMutation(auth);
   const [booking, setBooking] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isCanceling, setIsCanceling] = useState(false);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
-  const userKey = user?.sub || user?.username || user?.userName || user?.email || "signed-in";
-  const getAccessTokenRef = useRef(getAccessToken);
+  const hasBookingData = Array.isArray(bookingsQuery.data);
+  const isLoading =
+    auth.isLoading
+    || bookingsQuery.isLoading
+    || (!bookingsQuery.error && !hasBookingData)
+    || (!booking && bookingsQuery.isFetching);
+  const isCanceling = cancelBookingMutation.isPending;
   const isCanceled = booking?.status === "canceled";
 
   useEffect(() => {
-    getAccessTokenRef.current = getAccessToken;
-  }, [getAccessToken]);
-
-  useEffect(() => {
-    let isCurrent = true;
-
-    async function loadBooking() {
-      if (!isSignedIn) {
-        return;
-      }
-
-      setIsLoading(true);
-      setError("");
-      setStatusMessage("");
-
-      try {
-        const accessToken = getAccessTokenRef.current ? await getAccessTokenRef.current() : null;
-        const bookings = await getBookedFlights(accessToken, user);
-        const selectedBooking = bookings.find((item) => String(item.id) === String(bookingId));
-
-        if (isCurrent) {
-          setBooking(selectedBooking || null);
-          setError(selectedBooking ? "" : "Booking not found.");
-        }
-      } catch (requestError) {
-        if (isCurrent) {
-          setError(requestError.message);
-        }
-      } finally {
-        if (isCurrent) {
-          setIsLoading(false);
-        }
-      }
+    if (!isSignedIn || auth.isLoading || bookingsQuery.isLoading) {
+      return;
     }
 
-    loadBooking();
+    if (bookingsQuery.error) {
+      setBooking(null);
+      setError(bookingsQuery.error.message);
+      setStatusMessage("");
+      return;
+    }
 
-    return () => {
-      isCurrent = false;
-    };
-  }, [bookingId, isSignedIn, userKey]);
+    if (!hasBookingData) {
+      setError("");
+      setStatusMessage("");
+      return;
+    }
+
+    const selectedBooking = bookingsQuery.data.find((item) => String(item.id) === String(bookingId));
+
+    if (!selectedBooking && bookingsQuery.isFetching) {
+      setError("");
+      setStatusMessage("");
+      return;
+    }
+
+    setBooking(selectedBooking || null);
+    setError(bookingsQuery.error?.message || (selectedBooking ? "" : "Booking not found."));
+    setStatusMessage("");
+  }, [
+    auth.isLoading,
+    bookingId,
+    bookingsQuery.data,
+    bookingsQuery.error,
+    bookingsQuery.isFetching,
+    bookingsQuery.isLoading,
+    hasBookingData,
+    isSignedIn
+  ]);
 
   async function handleCancelBooking() {
     if (!booking || isCanceling || isCanceled) {
       return;
     }
 
-    setIsCanceling(true);
     setError("");
     setStatusMessage("");
 
     try {
-      const accessToken = getAccessTokenRef.current ? await getAccessTokenRef.current() : null;
-      const updatedBooking = await cancelBooking(booking.id, accessToken, user);
+      const updatedBooking = await cancelBookingMutation.mutateAsync(booking.id);
 
       setBooking(updatedBooking);
       setIsCancelConfirmOpen(false);
       setStatusMessage("Booking canceled.");
     } catch (requestError) {
       setError(requestError.message);
-    } finally {
-      setIsCanceling(false);
     }
   }
 

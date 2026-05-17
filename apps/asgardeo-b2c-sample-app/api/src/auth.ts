@@ -160,6 +160,10 @@ function getBearerToken(request) {
   return authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
 }
 
+export function hasBearerToken(request) {
+  return Boolean(getBearerToken(request));
+}
+
 function getLocalDemoUser() {
   return {
     id: "local-demo-user",
@@ -192,6 +196,10 @@ function getDemoHeaderUser(request) {
     givenName: undefined,
     familyName: undefined
   };
+}
+
+export function getRequestUserHint(request) {
+  return getDemoHeaderUser(request);
 }
 
 export async function getAuthenticatedUser(request) {
@@ -255,6 +263,30 @@ export async function resolveUser(request) {
   }
 
   return getAuthenticatedUser(request);
+}
+
+export async function resolveBearerUser(request) {
+  const token = getBearerToken(request);
+
+  if (!token) {
+    return null;
+  }
+
+  if (process.env.API_REQUIRE_AUTH === "true") {
+    return getAuthenticatedUser(request);
+  }
+
+  try {
+    const parsedToken = parseJwt(token);
+
+    if (parsedToken.payload?.sub) {
+      return mapClaimsToUser(parsedToken.payload);
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
 }
 
 export function assertUserHasPermissions(user, requiredPermissions = []) {

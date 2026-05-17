@@ -89,7 +89,7 @@ openapi.yaml
 }
 ```
 
-## Asgardeo API Protection
+## API Authorization
 
 By default, `API_REQUIRE_AUTH=false` so the frontend can call the sample API during local demos.
 When auth is disabled but a request includes an Asgardeo bearer token, the API uses the token claims for booking ownership instead of the local demo user.
@@ -109,16 +109,21 @@ When enabled, protected routes require:
 Authorization: Bearer <asgardeo-access-token>
 ```
 
-Protected endpoints:
+Search endpoints remain public and do not enforce scopes:
 
 ```text
 GET  /api/flights
-POST /api/flights
 GET  /api/flights/:flightId
-DELETE /api/flights/:flightId
 GET  /api/hotels
 GET  /api/trips
 GET  /api/locations
+```
+
+Protected endpoints:
+
+```text
+POST /api/flights
+DELETE /api/flights/:flightId
 POST /api/bookings
 GET  /api/bookings/flights
 GET  /api/me
@@ -137,17 +142,12 @@ PATCH /api/cds/profiles/:profileId
 When `API_REQUIRE_AUTH=true`, tokens must match `ASGARDEO_ISSUER` (or the default `${ASGARDEO_BASE_URL}/oauth2/token`), include one of the configured audiences, and include route-specific permissions in `scope`, `scp`, or `permissions`. The default permission names are:
 
 ```text
-wayfinder:flights:read
-wayfinder:flights:write
-wayfinder:hotels:read
-wayfinder:trips:read
-wayfinder:locations:read
-wayfinder:bookings:read
-wayfinder:bookings:write
-wayfinder:profile:read
-wayfinder:profile:write
-wayfinder:deal-alerts:read
-wayfinder:deal-alerts:write
-wayfinder:cds-profiles:read
-wayfinder:cds-profiles:write
+flights:write
+bookings:read
+profile:read
+profile:write
+deal-alerts:read
+deal-alerts:write
+cds-profiles:read
+cds-profiles:write
 ```

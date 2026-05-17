@@ -10,7 +10,7 @@ import {
   X
 } from "lucide-react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
-import { getLocations } from "./api";
+import { useApiAuth, useLocationQuery } from "./api-queries";
 import {
   clearCDSCookies,
   createSignInConfigWithCDSTracker,
@@ -633,10 +633,16 @@ function ChatWidget() {
   );
 }
 
-function FlightDetailsRoute({ criteria }) {
+function FlightDetailsRoute({ auth, criteria }) {
   const { flightId = "" } = useParams();
 
-  return <FlightDetailsPage criteria={criteria} flightId={flightId} />;
+  return <FlightDetailsPage auth={auth} criteria={criteria} flightId={flightId} />;
+}
+
+function LiveFlightDetailsRoute({ criteria }) {
+  const auth = useApiAuth();
+
+  return <FlightDetailsRoute auth={auth} criteria={criteria} />;
 }
 
 function PaymentRoute({ criteria }) {
@@ -737,6 +743,87 @@ function GuestCDSProfileBootstrap({ cdsProfileId, onProfileCreated }) {
   return null;
 }
 
+function getFallbackLocations() {
+  return {
+    flights: [
+      { name: "Colombo", type: "city" },
+      { name: "Singapore", type: "city" },
+      { name: "Tokyo", type: "city" },
+      { name: "London", type: "city" },
+      { name: "Dubai", type: "city" }
+    ],
+    hotels: [
+      { name: "Singapore Marina", type: "area" },
+      { name: "Tokyo Shibuya", type: "area" },
+      { name: "London Kings Cross", type: "area" }
+    ],
+    trips: [
+      { name: "Singapore", type: "destination" },
+      { name: "Tokyo", type: "destination" },
+      { name: "Dubai", type: "destination" }
+    ]
+  };
+}
+
+function LocationsLoader({ auth, isReady = true, onLocationsLoaded }) {
+  const flightLocationsQuery = useLocationQuery("flights", {
+    auth,
+    enabled: isReady
+  });
+  const hotelLocationsQuery = useLocationQuery("hotels", {
+    auth,
+    enabled: isReady
+  });
+  const tripLocationsQuery = useLocationQuery("trips", {
+    auth,
+    enabled: isReady
+  });
+
+  useEffect(() => {
+    if (!isReady || flightLocationsQuery.isLoading) {
+      return;
+    }
+
+    const fallbackLocations = getFallbackLocations();
+    const nextLocations = {
+      flights: flightLocationsQuery.data || fallbackLocations.flights,
+      hotels: hotelLocationsQuery.data || fallbackLocations.hotels,
+      trips: tripLocationsQuery.data || fallbackLocations.trips
+    };
+
+    onLocationsLoaded(nextLocations);
+  }, [
+    flightLocationsQuery.data,
+    flightLocationsQuery.isLoading,
+    hotelLocationsQuery.data,
+    isReady,
+    onLocationsLoaded,
+    tripLocationsQuery.data
+  ]);
+
+  return null;
+}
+
+function LiveLocationsLoader({ onLocationsLoaded }) {
+  const auth = useApiAuth();
+
+  return (
+    <LocationsLoader
+      auth={auth}
+      isReady={!auth.isLoading}
+      onLocationsLoaded={onLocationsLoaded}
+    />
+  );
+}
+
+function PublicLocationsLoader({ onLocationsLoaded }) {
+  return (
+    <LocationsLoader
+      onLocationsLoaded={onLocationsLoaded}
+    />
+  );
+}
+
 function AppRoutes({ authReady, cdsProfileId, criteria, locations, onSearch }) {
   const flightLandingElement = (
     <LandingRoute
@@ -796,7 +883,16 @@ function AppRoutes({ authReady, cdsProfileId, criteria, locations, onSearch }) {
           )
         }
       />
-      <Route path="/flights/:flightId" element={<FlightDetailsRoute criteria={criteria} />} />
+      <Route
+        path="/flights/:flightId"
+        element={
+          authReady ? (
+            <LiveFlightDetailsRoute criteria={criteria} />
+          ) : (
+            <FlightDetailsRoute criteria={criteria} />
+          )
+        }
+      />
       <Route
         path="/payment/flight/:flightId"
         element={authReady ? <PaymentRoute criteria={criteria} /> : <BookingsUnavailable />}
@@ -828,56 +924,6 @@ function App({ authReady }) {
     trips: []
   });
 
-  useEffect(() => {
-    let isCurrent = true;
-
-    async function loadLocations() {
-      try {
-        const [flightLocations, hotelLocations, tripLocations] = await Promise.all([
-          getLocations({ category: "flights" }),
-          getLocations({ category: "hotels" }),
-          getLocations({ category: "trips" })
-        ]);
-
-        if (isCurrent) {
-          setLocations({
-            flights: flightLocations,
-            hotels: hotelLocations,
-            trips: tripLocations
-          });
-        }
-      } catch {
-        if (isCurrent) {
-          setLocations({
-            flights: [
-              { name: "Colombo", type: "city" },
-              { name: "Singapore", type: "city" },
-              { name: "Tokyo", type: "city" },
-              { name: "London", type: "city" },
-              { name: "Dubai", type: "city" }
-            ],
-            hotels: [
-              { name: "Singapore Marina", type: "area" },
-              { name: "Tokyo Shibuya", type: "area" },
-              { name: "London Kings Cross", type: "area" }
-            ],
-            trips: [
-              { name: "Singapore", type: "destination" },
-              { name: "Tokyo", type: "destination" },
-              { name: "Dubai", type: "destination" }
-            ]
-          });
-        }
-      }
-    }
-
-    loadLocations();
-
-    return () => {
-      isCurrent = false;
-    };
-  }, []);
-
   function handleSearch(searchParams) {
     navigate(buildResultsPath(searchParams));
   }
@@ -906,9 +952,15 @@ function App({ authReady }) {
       )}
 
       {authReady ? (
-        <LiveCDSProfileBootstrap cdsProfileId={cdsProfileId} onProfileCreated={setCdsProfileId} />
+        <>
+          <LiveLocationsLoader onLocationsLoaded={setLocations} />
+          <LiveCDSProfileBootstrap cdsProfileId={cdsProfileId} onProfileCreated={setCdsProfileId} />
+        </>
       ) : (
-        <GuestCDSProfileBootstrap cdsProfileId={cdsProfileId} onProfileCreated={setCdsProfileId} />
+        <>
+          <PublicLocationsLoader onLocationsLoaded={setLocations} />
+          <GuestCDSProfileBootstrap cdsProfileId={cdsProfileId} onProfileCreated={setCdsProfileId} />
+        </>
       )}
 
       <AppRoutes
