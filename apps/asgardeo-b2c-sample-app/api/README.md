@@ -99,9 +99,40 @@ To require Asgardeo access tokens for protected endpoints:
 ```bash
 API_REQUIRE_AUTH=true
 ASGARDEO_BASE_URL=https://api.asgardeo.io/t/your-organization-name
-ASGARDEO_AUDIENCE=your-asgardeo-application-client-id
-API_PERMISSION_PREFIX=wayfinder:
+ASGARDEO_AUDIENCE=your-wayfinder-api-resource-identifier
+API_PERMISSION_PREFIX=
 ```
+
+### Configure API authorization in Asgardeo Console
+
+Register this sample API as a business API resource:
+
+1. Sign in to the Asgardeo Console.
+2. Go to **Resources** > **API Resources**.
+3. Click **New API**.
+4. Enter an identifier for the API resource. Use the same value as `ASGARDEO_AUDIENCE` because Asgardeo includes the API resource identifier in the access token `aud` claim.
+5. Add the Wayfinder scopes listed below. Keep the scope values exactly as shown unless you also configure `API_PERMISSION_PREFIX` to match your prefixed scope naming.
+6. Enable **Requires authorization** if you want role-based authorization for these scopes.
+7. Click **Finish**.
+
+Authorize the frontend application to request the API scopes:
+
+1. Go to **Applications**.
+2. Open the B2C frontend application.
+3. Go to the **API Authorization** tab.
+4. Click **Authorize an API Resource**.
+5. Select the Wayfinder API resource.
+6. Select the scopes the frontend or agent should be allowed to request, for example `bookings:read` and `bookings:write` for booking flows.
+7. Select the authorization policy. Use **Role-Based Access Control (RBAC)** when the API resource requires authorization.
+8. Click **Finish**.
+
+If RBAC is enabled, create or update roles so users can actually receive the authorized scopes:
+
+1. In the application, go to the **Roles** tab and choose the role audience you want to use.
+2. Create an application role, or use organization roles if the app is configured for organization role audience.
+3. Add the required Wayfinder API permissions to the role.
+4. Assign users or groups to the role.
+5. Make sure the frontend login request includes the scopes required by the flow. The sample frontend currently requests booking scopes from `frontend/src/main.jsx`.
 
 When enabled, protected routes require:
 
