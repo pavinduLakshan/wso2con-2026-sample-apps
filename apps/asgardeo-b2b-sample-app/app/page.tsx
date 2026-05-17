@@ -1,4 +1,5 @@
 import { LandingHeader, LandingHeroCopy, FooterBrand } from "./LandingAuth";
+import AgentChatWidget from "./AgentChatWidget";
 import HeroCtaSection from "./HeroCtaSection";
 
 export default function Home() {
@@ -166,6 +167,8 @@ export default function Home() {
           <a href="#outcomes">Outcomes</a>
         </div>
       </footer>
+
+      <AgentChatWidget />
     </main>
   );
 }

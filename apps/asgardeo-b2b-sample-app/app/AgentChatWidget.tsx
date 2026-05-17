@@ -34,6 +34,24 @@ function toAgentMessages(messages: ChatMessage[]) {
     .map(({ role, content }) => ({ role, content }));
 }
 
+function AgentLauncherIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="agent-chat-launcher-icon"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path d="M12 3v3" />
+      <path d="M7 9h10a4 4 0 0 1 4 4v1a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5v-1a4 4 0 0 1 4-4Z" />
+      <path d="M8 14h.01" />
+      <path d="M16 14h.01" />
+      <path d="M9 19l-2 2" />
+      <path d="M15 19l2 2" />
+    </svg>
+  );
+}
+
 export default function AgentChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -204,7 +222,7 @@ export default function AgentChatWidget() {
         aria-expanded={isOpen}
         onClick={() => setIsOpen((current) => !current)}
       >
-        AI
+        <AgentLauncherIcon />
       </button>
     </div>
   );

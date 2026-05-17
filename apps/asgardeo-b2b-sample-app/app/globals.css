@@ -3875,6 +3875,15 @@ select.form-field-input {
   width: 58px;
 }
 
+.agent-chat-launcher-icon {
+  height: 28px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  width: 28px;
+}
+
 @media (max-width: 640px) {
   .agent-chat-widget {
     bottom: 16px;
