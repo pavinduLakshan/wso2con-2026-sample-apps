@@ -19,7 +19,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import type { Duplex } from "node:stream";
 
-import { AsgardeoJavaScriptClient } from "@asgardeo/javascript";
+import { AsgardeoJavaScriptClient, type TokenResponse } from "@asgardeo/javascript";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { MultiServerMCPClient } from "@langchain/mcp-adapters";
@@ -88,8 +88,60 @@ type ToolWithSchema = {
     invoke?: (input: Record<string, unknown>) => Promise<unknown> | unknown;
 };
 
+type AgentRuntime = {
+    agent: ReturnType<typeof createReactAgent>;
+    client: MultiServerMCPClient;
+    tokenExpiresAtMs: number;
+    tools: ToolWithSchema[];
+};
+
+const TOKEN_REFRESH_SKEW_MS = 60_000;
+
 function isToolNamed(tool: ToolWithSchema, name: string) {
     return tool.name === name || Boolean(tool.name?.endsWith(`_${name}`));
+}
+
+function decodeBase64UrlJson(value: string): Record<string, unknown> | null {
+    try {
+        const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+        const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+
+        return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as Record<string, unknown>;
+    } catch {
+        return null;
+    }
+}
+
+function getAgentTokenExpiresAtMs(agentToken: TokenResponse) {
+    const jwtPayload = agentToken.accessToken.split(".").length === 3
+        ? decodeBase64UrlJson(agentToken.accessToken.split(".")[1])
+        : null;
+    const jwtExpiration = jwtPayload && typeof jwtPayload.exp === "number"
+        ? jwtPayload.exp * 1000
+        : 0;
+
+    if (jwtExpiration > 0) {
+        return jwtExpiration;
+    }
+
+    const createdAt = Number(agentToken.createdAt);
+    const expiresIn = Number(agentToken.expiresIn);
+
+    if (Number.isFinite(expiresIn) && expiresIn > 0) {
+        return (Number.isFinite(createdAt) && createdAt > 0 ? createdAt * 1000 : Date.now()) + (expiresIn * 1000);
+    }
+
+    return Date.now() + (5 * 60 * 1000);
+}
+
+function isRuntimeNearExpiry(runtime: AgentRuntime) {
+    return Date.now() + TOKEN_REFRESH_SKEW_MS >= runtime.tokenExpiresAtMs;
+}
+
+function isExpiredTokenError(error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    return /Token has expired|API request failed with 401/i.test(message);
 }
 
 function isJsonSchemaObject(value: unknown): value is JsonSchemaObject {
@@ -606,6 +658,7 @@ async function createAgent() {
     const asgardeoJavaScriptClient = new AsgardeoJavaScriptClient(asgardeoConfig);
     includeClientSecretInAgentAuthorizeRequest(asgardeoJavaScriptClient);
     const agentToken = await asgardeoJavaScriptClient.getAgentToken(agentConfig);
+    const tokenExpiresAtMs = getAgentTokenExpiresAtMs(agentToken);
 
     const client = new MultiServerMCPClient({
         travel: {
@@ -628,13 +681,67 @@ async function createAgent() {
         prompt: agentPrompt,
     });
 
-    return { agent, client, tools };
+    logger.info({
+        expiresAt: new Date(tokenExpiresAtMs).toISOString(),
+    }, "Loaded MCP tools with fresh agent token");
+
+    return { agent, client, tokenExpiresAtMs, tools };
 }
 
 async function runAgentServer() {
-    const { agent, client, tools } = await createAgent();
+    let runtime = await createAgent();
+    let refreshPromise: Promise<AgentRuntime> | null = null;
     const port = Number(process.env.PORT || process.env.AGENT_PORT || 8790);
     const host = process.env.HOST || "localhost";
+
+    async function refreshRuntime() {
+        if (!refreshPromise) {
+            const previousRuntime = runtime;
+
+            refreshPromise = createAgent()
+                .then(async (nextRuntime) => {
+                    runtime = nextRuntime;
+
+                    await previousRuntime.client.close().catch((error: unknown) => {
+                        logger.warn({ err: error }, "Failed to close expired MCP client");
+                    });
+
+                    return nextRuntime;
+                })
+                .finally(() => {
+                    refreshPromise = null;
+                });
+        }
+
+        return refreshPromise;
+    }
+
+    async function getRuntime() {
+        if (isRuntimeNearExpiry(runtime)) {
+            logger.info("Refreshing agent token before MCP tool call");
+
+            return refreshRuntime();
+        }
+
+        return runtime;
+    }
+
+    async function runWithFreshRuntime<T>(operation: (activeRuntime: AgentRuntime) => Promise<T>) {
+        let activeRuntime = await getRuntime();
+
+        try {
+            return await operation(activeRuntime);
+        } catch (error) {
+            if (!isExpiredTokenError(error)) {
+                throw error;
+            }
+
+            logger.warn({ err: error }, "MCP call used an expired token; refreshing and retrying once");
+            activeRuntime = await refreshRuntime();
+
+            return operation(activeRuntime);
+        }
+    }
 
     const server = createServer(async (request, response) => {
         const requestId = randomUUID();
@@ -655,11 +762,13 @@ async function runAgentServer() {
         requestLogger.info("HTTP request started");
 
         if (request.url === "/health") {
+            const activeRuntime = await getRuntime();
+
             writeHttpJson(response, 200, {
                 status: "ok",
                 features: {
                     dealAlertWebhook: true,
-                    cibaBatchTool: tools.some((tool) => isToolNamed(tool, "process_new_flight_deal_alerts")),
+                    cibaBatchTool: activeRuntime.tools.some((tool) => isToolNamed(tool, "process_new_flight_deal_alerts")),
                 },
             });
 
@@ -671,7 +780,7 @@ async function runAgentServer() {
                 const payload = await readHttpJsonBody(request);
 
                 writeHttpJson(response, 202, { status: "accepted" });
-                void processDealAlertWebhook(tools, payload).catch((error: unknown) => {
+                void runWithFreshRuntime((activeRuntime) => processDealAlertWebhook(activeRuntime.tools, payload)).catch((error: unknown) => {
                     requestLogger.error({ err: error }, "Error processing deal alert webhook");
                 });
             } catch (error) {
@@ -764,9 +873,9 @@ async function runAgentServer() {
 
                             messageLogger.info("Processing chat message");
                             const hardcodedResponse =
-                                await runHardcodedConsentCommand(latestMessage, tools);
+                                await runWithFreshRuntime((activeRuntime) => runHardcodedConsentCommand(latestMessage, activeRuntime.tools));
                             const responseMessage = hardcodedResponse ?? getResponseContent(
-                                (await agent.invoke({ messages })).messages.at(-1)?.content
+                                (await runWithFreshRuntime((activeRuntime) => activeRuntime.agent.invoke({ messages }))).messages.at(-1)?.content
                             );
 
                             if (isClosed) {
@@ -858,7 +967,10 @@ async function runAgentServer() {
     const shutdown = async () => {
         logger.info("Shutting down AI agent");
         server.close();
-        await client.close();
+        if (refreshPromise) {
+            await refreshPromise.catch(() => null);
+        }
+        await runtime.client.close();
         process.exit(0);
     };
 
