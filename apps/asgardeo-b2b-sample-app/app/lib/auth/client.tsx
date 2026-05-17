@@ -95,7 +95,7 @@ function buildAuthorizeUrl(options?: SignInOptions): string {
   return `${baseUrl}/oauth2/authorize?${params.toString()}`;
 }
 
-function buildImpersonateAuthorizeUrl(userId: string): string {
+function buildImpersonateAuthorizeUrl(userId: string, orgId?: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_ASGARDEO_BASE_URL ?? "";
   const clientId = process.env.NEXT_PUBLIC_ASGARDEO_CLIENT_ID ?? "";
   const redirectUri = process.env.NEXT_PUBLIC_ASGARDEO_AFTER_SIGN_IN_URL ?? window.location.origin;
@@ -107,11 +107,13 @@ function buildImpersonateAuthorizeUrl(userId: string): string {
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
-    response_type: "subject_token",
+    response_type: "id_token subject_token",
     scope: [...scopeSet].join(" "),
     requested_subject: userId,
     state: "impersonating",
     nonce,
+    fidp: "OrganizationSSO",
+    orgId: orgId ?? "",
   });
 
   return `${baseUrl}/oauth2/authorize?${params.toString()}`;
@@ -249,7 +251,11 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
 
   // Handle impersonation subject_token callback
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const queryParams = new URLSearchParams(window.location.search);
+    const fragmentParams = new URLSearchParams(window.location.hash.slice(1));
+    const fromFragment = fragmentParams.has("subject_token");
+    const params = fromFragment ? fragmentParams : queryParams;
+
     const subjectToken = params.get("subject_token");
     const state = params.get("state");
 
@@ -260,18 +266,31 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
     setIsExchanging(true);
     exchangingRef.current = true;
 
+    const callbackIdToken = params.get("id_token");
+
     const url = new URL(window.location.href);
-    url.searchParams.delete("subject_token");
-    url.searchParams.delete("session_state");
-    url.searchParams.delete("state");
-    url.searchParams.delete("nonce");
+    if (fromFragment) {
+      fragmentParams.delete("subject_token");
+      fragmentParams.delete("id_token");
+      fragmentParams.delete("session_state");
+      fragmentParams.delete("state");
+      fragmentParams.delete("nonce");
+      const remaining = fragmentParams.toString();
+      url.hash = remaining ? `#${remaining}` : "";
+    } else {
+      url.searchParams.delete("subject_token");
+      url.searchParams.delete("id_token");
+      url.searchParams.delete("session_state");
+      url.searchParams.delete("state");
+      url.searchParams.delete("nonce");
+    }
     window.history.replaceState({}, "", url.toString());
 
-    const storedIdToken = localStorage.getItem("id_token");
+    const actorToken = callbackIdToken ?? localStorage.getItem("id_token");
     const pendingName = localStorage.getItem("wayfinder.impersonate_pending_name");
 
     fetch("/api/auth/impersonate", {
-      body: JSON.stringify({ subject_token: subjectToken, actor_token: storedIdToken }),
+      body: JSON.stringify({ subject_token: subjectToken, actor_token: actorToken }),
       headers: { "Content-Type": "application/json" },
       method: "POST",
     })
@@ -390,10 +409,14 @@ export function AuthProvider({ children, initialIsExchanging = false }: { childr
       console.error("[impersonation] No id_token available to use as actor_token.");
       return;
     }
+    const storedAccessToken = localStorage.getItem("access_token");
+    const orgId = storedAccessToken
+      ? (decodeJwtPayload(storedAccessToken)?.org_id as string | undefined)
+      : undefined;
     localStorage.setItem("wayfinder.impersonate_pending_id", userId);
     localStorage.setItem("wayfinder.impersonate_pending_name", userName);
     setIsStartingImpersonation(true);
-    window.location.href = buildImpersonateAuthorizeUrl(userId);
+    window.location.href = buildImpersonateAuthorizeUrl(userId, orgId);
   }, []);
 
   const stopImpersonation = useCallback(() => {
