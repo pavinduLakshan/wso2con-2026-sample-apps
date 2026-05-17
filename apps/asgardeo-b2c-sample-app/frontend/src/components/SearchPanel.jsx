@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CalendarDays,
@@ -126,11 +126,62 @@ function buildCalendarDays(monthDate) {
   return days;
 }
 
+function useViewportAwareMenuPlacement(isOpen) {
+  const anchorRef = useRef(null);
+  const menuRef = useRef(null);
+  const [placement, setPlacement] = useState({
+    horizontal: "right",
+    vertical: "below"
+  });
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    function updatePlacement() {
+      if (!anchorRef.current || !menuRef.current) {
+        return;
+      }
+
+      const anchorRect = anchorRef.current.getBoundingClientRect();
+      const menuRect = menuRef.current.getBoundingClientRect();
+      const spaceAbove = anchorRect.top;
+      const spaceBelow = window.innerHeight - anchorRect.bottom;
+      const spaceLeft = anchorRect.right;
+      const spaceRight = window.innerWidth - anchorRect.left;
+      const nextPlacement = {
+        horizontal: spaceRight >= menuRect.width || spaceRight >= spaceLeft ? "left" : "right",
+        vertical: spaceBelow >= menuRect.height || spaceBelow >= spaceAbove ? "below" : "above"
+      };
+
+      setPlacement((currentPlacement) => (
+        currentPlacement.horizontal === nextPlacement.horizontal &&
+        currentPlacement.vertical === nextPlacement.vertical
+          ? currentPlacement
+          : nextPlacement
+      ));
+    }
+
+    updatePlacement();
+    window.addEventListener("resize", updatePlacement);
+    window.addEventListener("scroll", updatePlacement, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePlacement);
+      window.removeEventListener("scroll", updatePlacement, true);
+    };
+  }, [isOpen]);
+
+  return { anchorRef, menuRef, placement };
+}
+
 function DateField({ defaultValue, isOpen, onOpen, onClose }) {
   const [visibleMonth, setVisibleMonth] = useState(new Date(2026, 4, 1));
   const [startDate, setStartDate] = useState(new Date(2026, 5, 12));
   const [endDate, setEndDate] = useState(new Date(2026, 5, 18));
   const displayValue = formatDateRange(startDate, endDate) || defaultValue;
+  const { anchorRef, menuRef, placement } = useViewportAwareMenuPlacement(isOpen);
 
   function selectDate(date) {
     if (!startDate || (startDate && endDate) || date < startDate) {
@@ -182,7 +233,7 @@ function DateField({ defaultValue, isOpen, onOpen, onClose }) {
   }
 
   return (
-    <label className="field date-field">
+    <label className="field date-field" ref={anchorRef}>
       <span>Dates</span>
       <div className="field-control">
         <CalendarDays size={18} />
@@ -196,7 +247,10 @@ function DateField({ defaultValue, isOpen, onOpen, onClose }) {
         />
       </div>
       {isOpen && (
-        <div className="date-menu">
+        <div
+          className={`date-menu date-menu--${placement.vertical} date-menu--align-${placement.horizontal}`}
+          ref={menuRef}
+        >
           <div className="calendar-wrap">
             <button
               className="calendar-nav"

@@ -708,7 +708,6 @@ h1 {
 .date-menu,
 .travelers-menu {
   position: absolute;
-  bottom: calc(100% + 10px);
   z-index: 70;
   background: #ffffff;
   border: 1px solid #d9e2de;
@@ -717,9 +716,24 @@ h1 {
 }
 
 .date-menu {
-  right: 0;
   width: min(700px, calc(100vw - 32px));
   padding: 14px 16px 0;
+}
+
+.date-menu--above {
+  bottom: calc(100% + 10px);
+}
+
+.date-menu--below {
+  top: calc(100% + 10px);
+}
+
+.date-menu--align-left {
+  left: 0;
+}
+
+.date-menu--align-right {
+  right: 0;
 }
 
 .calendar-wrap {
@@ -818,6 +832,7 @@ h1 {
 
 .travelers-menu {
   right: 0;
+  bottom: calc(100% + 10px);
   width: min(360px, calc(100vw - 32px));
   padding: 18px;
 }
