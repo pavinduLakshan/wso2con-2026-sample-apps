@@ -197,7 +197,7 @@ export function ProfilePageWithAuth() {
                 />
               </label>
               <div className="profile-edit-actions">
-                <button className="profile-secondary-button" type="button" onClick={cancelEditing} disabled={isSaving}>
+                <button className="profile-accent-button" type="button" onClick={cancelEditing} disabled={isSaving}>
                   <X size={16} />
                   <span>Cancel</span>
                 </button>

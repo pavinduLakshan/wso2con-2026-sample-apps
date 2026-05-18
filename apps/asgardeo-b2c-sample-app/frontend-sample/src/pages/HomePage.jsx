@@ -214,7 +214,7 @@ export function HomePage({ category = "flights", locations, onSearch }) {
           <h1>{details.heroHeading}</h1>
           <p>{details.heroCopy}</p>
           <div className="hero-actions" aria-label="Popular planning links">
-            <a className="secondary-button" href="#deals">
+            <a className="accent-button" href="#deals">
               <Sparkles size={18} />
               See ideas
             </a>
@@ -276,7 +276,7 @@ export function HomePage({ category = "flights", locations, onSearch }) {
           <p className="eyebrow">Why Wayfinder</p>
           <h2>{details.whyTitle}</h2>
           <p className="section-copy">{details.whyCopy}</p>
-          <a className="secondary-button" href="#search">
+          <a className="accent-button" href="#search">
             <Search size={18} />
             Plan a route
           </a>
