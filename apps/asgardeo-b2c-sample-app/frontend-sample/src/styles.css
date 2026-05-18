@@ -106,7 +106,7 @@ a {
 .insight-strip div,
 .section-heading,
 .link-button,
-.accent-button,
+.secondary-button,
 .planner-actions,
 .filter-button,
 .icon-text-button,
@@ -170,7 +170,7 @@ a {
 .primary-small,
 .icon-text-button,
 .search-button,
-.accent-button,
+.secondary-button,
 .link-button,
 .filter-button {
   min-height: 42px;
@@ -1428,7 +1428,7 @@ h1 {
 
 .profile-edit-button,
 .profile-primary-button,
-.profile-accent-button {
+.profile-secondary-button {
   display: inline-flex;
   gap: 8px;
   align-items: center;
@@ -1441,7 +1441,7 @@ h1 {
 }
 
 .profile-edit-button,
-.profile-accent-button {
+.profile-secondary-button {
   color: #2563eb;
   background: #ffffff;
   border: 1px solid rgba(37, 99, 235, 0.22);
@@ -1454,7 +1454,7 @@ h1 {
 }
 
 .profile-edit-button:hover,
-.profile-accent-button:hover {
+.profile-secondary-button:hover {
   background: #eff6ff;
 }
 
@@ -1465,7 +1465,7 @@ h1 {
 
 .profile-edit-button:disabled,
 .profile-primary-button:disabled,
-.profile-accent-button:disabled {
+.profile-secondary-button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }
@@ -1884,7 +1884,7 @@ h1 {
 
 .travel-insurance-button,
 .booking-cancel-button,
-.booking-cancel-accent-button {
+.booking-cancel-secondary-button {
   min-height: 44px;
   padding: 0 16px;
   border-radius: 8px;
@@ -1903,14 +1903,14 @@ h1 {
   border: 0;
 }
 
-.booking-cancel-accent-button {
+.booking-cancel-secondary-button {
   color: #7f1d1d;
   background: #ffffff;
   border: 1px solid #fecaca;
 }
 
 .booking-cancel-button:disabled,
-.booking-cancel-accent-button:disabled {
+.booking-cancel-secondary-button:disabled {
   color: #6b7280;
   background: #e5e7eb;
   border-color: #e5e7eb;
@@ -2282,7 +2282,7 @@ h2 {
   line-height: 1.7;
 }
 
-.accent-button {
+.secondary-button {
   gap: 8px;
   padding: 0 18px;
   color: #111827;
