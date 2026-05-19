@@ -99,7 +99,7 @@ a {
 .brand,
 .auth-cluster,
 .header-nav,
-.primary-small,
+.cta-button,
 .tabs,
 .trip-type,
 .field-control,
@@ -167,8 +167,8 @@ a {
 }
 
 .text-button,
-.secondary-button,
-.primary-small,
+.primary-button,
+.cta-button,
 .icon-text-button,
 .search-button,
 .accent-button,
@@ -186,14 +186,14 @@ a {
   background: transparent;
 }
 
-.secondary-button {
+.primary-button {
   padding: 0 12px;
   color: #263136;
   background: #f1f5f9;
   border: 1px solid #475569;
 }
 
-.primary-small {
+.cta-button {
   padding: 0 18px;
   color: #151e24;
   background: #ffd166;
@@ -3019,7 +3019,7 @@ h2 {
   }
 
   .text-button,
-  .primary-small,
+  .cta-button,
   .icon-text-button {
     min-height: 38px;
     padding: 0 10px;
