@@ -217,9 +217,13 @@ function LiveAuthHeader() {
       >
         Sign in
       </button>
-      <a className="cta-button" href={SIGN_UP_URL}>
+      <button
+        className="cta-button"
+        type="button"
+        onClick={() => { window.location.href = SIGN_UP_URL; }}
+      >
         Sign up
-      </a>
+      </button>
     </div>
   );
 }
