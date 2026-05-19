@@ -207,7 +207,7 @@ function LiveAuthHeader() {
   return (
     <div className="auth-cluster">
       <button
-        className="text-button"
+        className="secondary-button"
         type="button"
         disabled={isLoading}
         onClick={async () => {
@@ -227,7 +227,7 @@ function LiveAuthHeader() {
 function SignedOutHeader({ disabled }) {
   return (
     <div className="auth-cluster">
-      <button className="text-button" type="button" disabled={disabled}>
+      <button className="secondary-button" type="button" disabled={disabled}>
         Sign in
       </button>
       <button className="primary-small" type="button" disabled={disabled}>

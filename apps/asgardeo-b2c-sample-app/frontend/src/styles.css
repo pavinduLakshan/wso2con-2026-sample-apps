@@ -1,5 +1,4 @@
 :root {
-  --color-secondary: #eaf3ff;
   color: #111827;
   background: #ffffff;
   font-family:
@@ -168,6 +167,7 @@ a {
 }
 
 .text-button,
+.secondary-button,
 .primary-small,
 .icon-text-button,
 .search-button,
@@ -184,6 +184,13 @@ a {
   padding: 0 12px;
   color: #263136;
   background: transparent;
+}
+
+.secondary-button {
+  padding: 0 12px;
+  color: #263136;
+  background: #f1f5f9;
+  border: 1px solid #475569;
 }
 
 .primary-small {
